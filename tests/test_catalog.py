@@ -1,6 +1,12 @@
 import httpx
 
-from gateway.catalog import build_catalog, fetch_upstream_listing, load_snapshot, save_snapshot
+from gateway.catalog import (
+    build_catalog,
+    fetch_upstream_listing,
+    load_snapshot,
+    resolve_logos,
+    save_snapshot,
+)
 
 from .conftest import endpoint, per_call
 
@@ -72,6 +78,7 @@ def test_routes_and_reserved_labels(settings):
         "category": "search",
         "subcategory": "web-search",
         "upstreamProvider": "Exa",
+        "upstreamLogoUrl": None,
     }
 
 
@@ -101,3 +108,35 @@ def test_snapshot_round_trip(settings, tmp_path):
     assert catalog is not None
     assert catalog.synced_at == "2026-10-17T00:00:00Z"
     assert len(catalog.tools) == 1
+
+
+async def test_logos_are_found_by_slug_or_catalog_id_and_cached():
+    taxonomy = TAXONOMY + [
+        {"id": "strale", "kind": "provider", "provider": "api.strale.io", "parents": ["data"]},
+    ]
+    present = {
+        "https://cdn.example/logos/providers/exa.png",
+        "https://cdn.example/logos/brands/strale.png",
+    }
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        if str(request.url) in present:
+            return httpx.Response(200, headers={"content-type": "image/png"})
+        return httpx.Response(404, headers={"content-type": "text/html"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        logos = await resolve_logos(
+            client,
+            ["exa", "api.strale.io", "nologo", "cached"],
+            taxonomy,
+            "https://cdn.example/logos",
+            {"cached": "https://cdn.example/logos/providers/cached.svg"},
+        )
+    assert logos == {
+        "exa": "https://cdn.example/logos/providers/exa.png",
+        "api.strale.io": "https://cdn.example/logos/brands/strale.png",
+        "cached": "https://cdn.example/logos/providers/cached.svg",
+    }
+    assert not any("cached" in url for url in seen)

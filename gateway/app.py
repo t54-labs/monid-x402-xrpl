@@ -128,6 +128,7 @@ def create_app(
             "x402Version": 2,
             "name": settings.brand_name,
             "description": settings.GATEWAY_DESCRIPTION,
+            "logoUrl": settings.GATEWAY_LOGO_URL or None,
             "version": catalog.synced_at,
             "total": len(catalog.tools),
             "page": page,

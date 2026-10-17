@@ -55,6 +55,7 @@ class Catalog:
     tools: list[Tool] = field(default_factory=list)
     taxonomy: list[Mapping[str, Any]] = field(default_factory=list)
     synced_at: str | None = None
+    logos: dict[str, str] = field(default_factory=dict)  # provider slug -> logo URL
 
     def __post_init__(self) -> None:
         self._index = {tool.route_key: tool for tool in self.tools}
@@ -79,6 +80,7 @@ class Catalog:
             "category": parents[0] if parents else None,
             "subcategory": subcategory,
             "upstreamProvider": tool.provider_name,
+            "upstreamLogoUrl": self.logos.get(tool.provider),
         }
 
 
@@ -94,6 +96,7 @@ def build_catalog(
     settings: Settings,
     *,
     synced_at: str | None = None,
+    logos: Mapping[str, str] | None = None,
 ) -> Catalog:
     terms = settings.upstream_brand_terms if settings.HIDE_UPSTREAM_BRAND else ()
     tools: dict[str, Tool] = {}
@@ -120,7 +123,7 @@ def build_catalog(
         )
         tools[tool.route_key] = tool
     ordered = sorted(tools.values(), key=lambda t: (t.provider, t.endpoint))
-    return Catalog(tools=ordered, taxonomy=list(taxonomy), synced_at=synced_at)
+    return Catalog(tools=ordered, taxonomy=list(taxonomy), synced_at=synced_at, logos=dict(logos or {}))
 
 
 async def fetch_upstream_listing(
@@ -149,13 +152,66 @@ async def fetch_upstream_listing(
     return endpoints, taxonomy
 
 
+LOGO_EXTENSIONS = ("svg", "png", "jpg", "jpeg", "webp")
+
+
+def logo_candidates(provider: str, taxonomy: Iterable[Mapping[str, Any]], base_url: str) -> list[str]:
+    """Where the upstream site keeps a provider's logo: by slug or catalog id, two folders."""
+    item_id = next(
+        (i.get("id") for i in taxonomy if i.get("kind") == "provider" and i.get("provider") == provider),
+        None,
+    )
+    slugs = dict.fromkeys(s for s in (provider.replace(".", "-"), item_id) if s)
+    base = base_url.rstrip("/")
+    return [
+        f"{base}/{folder}/{slug}.{ext}"
+        for folder in ("providers", "brands")
+        for slug in slugs
+        for ext in LOGO_EXTENSIONS
+    ]
+
+
+async def resolve_logos(
+    client: httpx.AsyncClient,
+    providers: Iterable[str],
+    taxonomy: Iterable[Mapping[str, Any]],
+    base_url: str,
+    known: Mapping[str, str],
+) -> dict[str, str]:
+    """Find each provider's logo once; providers without one get the directory's initial tile."""
+    taxonomy = list(taxonomy)
+    found = {p: u for p, u in known.items()}
+    semaphore = asyncio.Semaphore(8)
+
+    async def probe(provider: str) -> None:
+        for url in logo_candidates(provider, taxonomy, base_url):
+            async with semaphore:
+                try:
+                    response = await client.head(url, timeout=10, follow_redirects=True)
+                except httpx.HTTPError:
+                    continue
+            if response.status_code == 200 and response.headers.get("content-type", "").startswith("image/"):
+                found[provider] = url
+                return
+
+    await asyncio.gather(*(probe(p) for p in set(providers) if p not in found))
+    return found
+
+
 def save_snapshot(
-    path: str, endpoints: list[dict[str, Any]], taxonomy: list[dict[str, Any]], synced_at: str
+    path: str,
+    endpoints: list[dict[str, Any]],
+    taxonomy: list[dict[str, Any]],
+    synced_at: str,
+    logos: Mapping[str, str] | None = None,
 ) -> None:
     directory = os.path.dirname(path) or "."
     os.makedirs(directory, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", dir=directory, delete=False, encoding="utf-8") as tmp:
-        json.dump({"syncedAt": synced_at, "endpoints": endpoints, "taxonomy": taxonomy}, tmp)
+        json.dump(
+            {"syncedAt": synced_at, "endpoints": endpoints, "taxonomy": taxonomy, "logos": dict(logos or {})},
+            tmp,
+        )
         temp_name = tmp.name
     os.replace(temp_name, path)
 
@@ -171,6 +227,7 @@ def load_snapshot(path: str, settings: Settings) -> Catalog | None:
         raw.get("taxonomy") or [],
         settings,
         synced_at=raw.get("syncedAt"),
+        logos=raw.get("logos") or {},
     )
 
 
@@ -187,11 +244,18 @@ class CatalogStore:
 
         endpoints, taxonomy = await fetch_upstream_listing(self._client, self._settings.MONID_API_BASE_URL)
         synced_at = datetime.now(UTC).isoformat()
-        catalog = build_catalog(endpoints, taxonomy, self._settings, synced_at=synced_at)
+        logos = await resolve_logos(
+            self._client,
+            (str(e.get("provider") or "") for e in endpoints if e.get("provider")),
+            taxonomy,
+            self._settings.UPSTREAM_LOGO_BASE_URL,
+            self.catalog.logos,
+        )
+        catalog = build_catalog(endpoints, taxonomy, self._settings, synced_at=synced_at, logos=logos)
         if not catalog.tools:
             raise RuntimeError("upstream listing returned no usable tools")
         await asyncio.to_thread(
-            save_snapshot, self._settings.CATALOG_SNAPSHOT_PATH, endpoints, taxonomy, synced_at
+            save_snapshot, self._settings.CATALOG_SNAPSHOT_PATH, endpoints, taxonomy, synced_at, logos
         )
         self.catalog = catalog
         logger.info("catalog synced: %d tools", len(catalog.tools))

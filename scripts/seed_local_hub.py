@@ -4,10 +4,10 @@
         uv run python -m scripts.seed_local_hub
 
 Reads the running gateway's /.well-known/x402 (every page) and upserts one Merchant
-(the payTo address, named after the gateway) with every tool as a Resource (with the catalog's category / upstreamProvider labels, which
-the Hub's provider-grouping branch reads), the way
-the Hub's /verify would if it accepted this many. Refuses any database that is not on
-a loopback host.
+(the payTo address, named after the gateway, with its logo) and every tool as a
+Resource, including the catalog labels the Hub's provider-grouping branch reads
+(category, subcategory, upstreamProvider, externalId, and upstreamLogoUrl once that
+column exists). Refuses any database that is not on a loopback host.
 """
 
 from __future__ import annotations
@@ -67,6 +67,7 @@ def main() -> int:
             r.get("subcategory"),
             r.get("upstreamProvider"),
             r.get("externalId"),
+            r.get("upstreamLogoUrl"),
         )
         for r in resources
         if r.get("price")
@@ -74,31 +75,43 @@ def main() -> int:
     with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO "Merchant" (address, name, description, website, category, "categorySource",
-                                    "categorizedAt", "createdAt", "updatedAt")
-            VALUES (%s, %s, %s, %s, %s, 'manual', now(), now(), now())
+            INSERT INTO "Merchant" (address, name, description, website, "logoUrl", category,
+                                    "categorySource", "categorizedAt", "createdAt", "updatedAt")
+            VALUES (%s, %s, %s, %s, %s, %s, 'manual', now(), now(), now())
             ON CONFLICT (address) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description,
-                website = EXCLUDED.website, category = EXCLUDED.category, "updatedAt" = now()
+                website = EXCLUDED.website, "logoUrl" = EXCLUDED."logoUrl", category = EXCLUDED.category,
+                "updatedAt" = now()
             """,
-            (address, meta["name"], meta["description"], GATEWAY, CATEGORY),
+            (address, meta["name"], meta["description"], GATEWAY, meta.get("logoUrl"), CATEGORY),
         )
+        cur.execute(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'Resource' AND column_name = 'upstreamLogoUrl'"
+        )
+        has_logo_column = cur.fetchone() is not None
+        if not has_logo_column:
+            rows = [row[:-1] for row in rows]
+        logo_column = ', "upstreamLogoUrl"' if has_logo_column else ""
+        logo_value = ", %s" if has_logo_column else ""
+        logo_update = ', "upstreamLogoUrl" = EXCLUDED."upstreamLogoUrl"' if has_logo_column else ""
         cur.executemany(
-            """
+            f"""
             INSERT INTO "Resource" (id, "merchantAddr", url, name, description, "priceAmount", "priceAsset",
                                     "priceAssetIssuer", schema, network, category, subcategory,
-                                    "upstreamProvider", "externalId", "isDiscovered", "isActive",
+                                    "upstreamProvider", "externalId"{logo_column}, "isDiscovered", "isActive",
                                     "createdAt", "updatedAt")
-            VALUES (gen_random_uuid(), %s, %s, %s, %s, %s, %s, %s, 'x402', %s, %s, %s, %s, %s,
+            VALUES (gen_random_uuid(), %s, %s, %s, %s, %s, %s, %s, 'x402', %s, %s, %s, %s, %s{logo_value},
                     false, true, now(), now())
             ON CONFLICT ("merchantAddr", url) DO UPDATE SET name = EXCLUDED.name,
                 description = EXCLUDED.description, "priceAmount" = EXCLUDED."priceAmount",
                 category = EXCLUDED.category, subcategory = EXCLUDED.subcategory,
-                "upstreamProvider" = EXCLUDED."upstreamProvider", "externalId" = EXCLUDED."externalId",
-                "isActive" = true, "updatedAt" = now()
+                "upstreamProvider" = EXCLUDED."upstreamProvider", "externalId" = EXCLUDED."externalId"
+                {logo_update}, "isActive" = true, "updatedAt" = now()
             """,
             rows,
         )
-    print(f"seeded merchant {meta['name']} ({address}) with {len(rows)} tools")
+    logos = "with provider logos" if has_logo_column else "(Hub has no upstreamLogoUrl column yet)"
+    print(f"seeded merchant {meta['name']} ({address}) with {len(rows)} tools {logos}")
     return 0
 
 

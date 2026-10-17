@@ -72,6 +72,9 @@ class Settings(BaseSettings):
         "Tool Router — Powered by Monid. Pay-per-call data, search, social, commerce, "
         "finance and generative AI tools for agents, settled in RLUSD on the XRP Ledger."
     )
+    # Merchant icon for directories, and where the upstream keeps its provider logos.
+    GATEWAY_LOGO_URL: str = "https://monid.ai/favicon.svg"
+    UPSTREAM_LOGO_BASE_URL: str = "https://monid.ai/logos"
     # Strip the upstream platform's name from public tool text (for a white-label brand).
     HIDE_UPSTREAM_BRAND: bool = False
     UPSTREAM_BRAND_TERMS: str = "Monid"
