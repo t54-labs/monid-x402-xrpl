@@ -73,6 +73,26 @@ uv run python -m scripts.catalog_report   # sync the live catalog and summarise 
 The catalog syncs from the upstream's public listing (no key) every
 `CATALOG_REFRESH_SECONDS` and is cached at `CATALOG_SNAPSHOT_PATH`.
 
+## End-to-end test (XRPL testnet)
+
+```bash
+uv run python -m scripts.catalog_report            # writes the catalog snapshot
+E2E_CATALOG=data/catalog.json uv run python -m scripts.e2e_testnet
+```
+
+Runs the gateway on localhost and pays it with real **testnet** RLUSD through t54's
+testnet facilitator: it creates faucet wallets on first run (kept in
+`data/e2e-wallets.json`), opens RLUSD trust lines, buys a little testnet RLUSD
+through the testnet AMM, then checks:
+- Hub-style probes get a quote.
+- A paid call settles on-chain to the merchant, carrying SourceTag 804681468.
+- A failed upstream run is not charged.
+- An async run settles.
+- The ledger records each outcome.
+
+The upstream is a local stand-in (`scripts/fake_monid.py`) unless
+`E2E_REAL_UPSTREAM_KEY` is set.
+
 ## Open items
 
 - `GATEWAY_BRAND_NAME`: undecided. Using "Monid" needs Monid's consent.
