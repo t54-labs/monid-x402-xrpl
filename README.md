@@ -74,6 +74,18 @@ uv run python -m scripts.catalog_report   # sync the live catalog and summarise 
 The catalog syncs from the upstream's public listing (no key) every
 `CATALOG_REFRESH_SECONDS` and is cached at `CATALOG_SNAPSHOT_PATH`.
 
+## Try one paid call
+
+With the gateway running (`uv run uvicorn gateway.main:app`, testnet settings) and a
+funded testnet payer wallet in `data/e2e-wallets.json` (created by the E2E run):
+
+```bash
+uv run python -m scripts.call_tool /t/exa/search '{"query": "XRP Ledger", "numResults": 2}'
+uv run python -m scripts.call_tool /t/dataforseo/serp/google/organic/live/advanced '{}' --quote-only
+```
+
+It prints the RLUSD quote, the tool output, and the testnet settlement transaction.
+
 ## End-to-end test (XRPL testnet)
 
 ```bash
