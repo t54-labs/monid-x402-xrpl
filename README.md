@@ -86,6 +86,18 @@ uv run python -m scripts.call_tool /t/dataforseo/serp/google/organic/live/advanc
 
 It prints the RLUSD quote, the tool output, and the testnet settlement transaction.
 
+## Preview on a local XRPL AI Hub
+
+1. Start a disposable Postgres:
+   `docker run -d --name monid-hub-pg -e POSTGRES_PASSWORD=password -e POSTGRES_DB=x402_xrpl -p 127.0.0.1:5440:5432 postgres:15-alpine`
+2. Apply the Hub's non-Rewards migrations. Its Rewards migrations need the staging role setup, and the
+   directory pages don't use them.
+3. With the gateway running:
+   `HUB_DATABASE_URL=postgresql://postgres:password@127.0.0.1:5440/x402_xrpl uv run python -m scripts.seed_local_hub`
+4. Start the Hub API on :4011 and the website on :3000 (`hub-api` / `hub-web` in
+   `.claude/launch.json`).
+5. Open http://localhost:3000/directory.
+
 ## End-to-end test (XRPL testnet)
 
 ```bash

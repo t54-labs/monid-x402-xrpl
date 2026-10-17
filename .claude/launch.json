@@ -4,8 +4,36 @@
     {
       "name": "monid-gateway",
       "runtimeExecutable": "uv",
-      "runtimeArgs": ["--directory", "/Users/wowill/Documents/webProject/t54/monid-x402-xrpl", "run", "uvicorn", "gateway.main:app", "--host", "127.0.0.1", "--port", "8000"],
+      "runtimeArgs": [
+        "--directory",
+        "/Users/wowill/Documents/webProject/t54/monid-x402-xrpl",
+        "run",
+        "uvicorn",
+        "gateway.main:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8000"
+      ],
       "port": 8000
+    },
+    {
+      "name": "hub-api",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-lc",
+        "cd /Users/wowill/Documents/webProject/t54/xrpl-ai-hub/apps/api && DATABASE_URL=postgresql://postgres:password@127.0.0.1:5440/x402_xrpl PORT=4011 AGENT_LEAGUE_ENABLED=false npx ts-node-dev --transpile-only src/index.ts"
+      ],
+      "port": 4011
+    },
+    {
+      "name": "hub-web",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-lc",
+        "cd /Users/wowill/Documents/webProject/t54/xrpl-ai-hub && API_URL=http://127.0.0.1:4011 NEXT_PUBLIC_XRPL_NETWORK=mainnet pnpm --filter web dev"
+      ],
+      "port": 3000
     }
   ]
 }
