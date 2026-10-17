@@ -4,7 +4,8 @@
         uv run python -m scripts.seed_local_hub
 
 Reads the running gateway's /.well-known/x402 (every page) and upserts one Merchant
-(the payTo address, named after the gateway) with every tool as a Resource, the way
+(the payTo address, named after the gateway) with every tool as a Resource (with the catalog's category / upstreamProvider labels, which
+the Hub's provider-grouping branch reads), the way
 the Hub's /verify would if it accepted this many. Refuses any database that is not on
 a loopback host.
 """
@@ -62,6 +63,10 @@ def main() -> int:
             asset,
             r["price"]["issuer"],
             r["price"]["network"],
+            r.get("category"),
+            r.get("subcategory"),
+            r.get("upstreamProvider"),
+            r.get("externalId"),
         )
         for r in resources
         if r.get("price")
@@ -80,11 +85,15 @@ def main() -> int:
         cur.executemany(
             """
             INSERT INTO "Resource" (id, "merchantAddr", url, name, description, "priceAmount", "priceAsset",
-                                    "priceAssetIssuer", schema, network, "isDiscovered", "isActive",
+                                    "priceAssetIssuer", schema, network, category, subcategory,
+                                    "upstreamProvider", "externalId", "isDiscovered", "isActive",
                                     "createdAt", "updatedAt")
-            VALUES (gen_random_uuid(), %s, %s, %s, %s, %s, %s, %s, 'x402', %s, false, true, now(), now())
+            VALUES (gen_random_uuid(), %s, %s, %s, %s, %s, %s, %s, 'x402', %s, %s, %s, %s, %s,
+                    false, true, now(), now())
             ON CONFLICT ("merchantAddr", url) DO UPDATE SET name = EXCLUDED.name,
                 description = EXCLUDED.description, "priceAmount" = EXCLUDED."priceAmount",
+                category = EXCLUDED.category, subcategory = EXCLUDED.subcategory,
+                "upstreamProvider" = EXCLUDED."upstreamProvider", "externalId" = EXCLUDED."externalId",
                 "isActive" = true, "updatedAt" = now()
             """,
             rows,
