@@ -193,7 +193,6 @@ def main() -> int:
         upstream_url = f"http://127.0.0.1:{UPSTREAM_PORT}"
         wait_healthy(f"{upstream_url}/public/v1/categories")
     gateway_env = {
-        "GATEWAY_BRAND_NAME": "E2E Tool Router",
         "PUBLIC_BASE_URL": GATEWAY,
         "DATABASE_PATH": str(WORK / "gateway.sqlite3"),
         "CATALOG_SNAPSHOT_PATH": str(WORK / "catalog.json"),

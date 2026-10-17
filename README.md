@@ -8,8 +8,9 @@ RLUSD; we run the tool with our own prepaid upstream key and return the result.
 agent ──RLUSD (x402 exact, t54 facilitator)──▶ gateway ──API key, USD balance──▶ upstream tool
 ```
 
-It is listed on XRPL AI Hub as a single merchant: one brand, one receiving address,
-every tool as a service under it.
+It is listed on XRPL AI Hub as a single merchant, **Monid Tool Router** ("Tool Router —
+Powered by Monid", after the Heurist Inference Router convention): one receiving
+address, every tool as a service under it.
 
 ## How a call works
 
@@ -64,7 +65,7 @@ They stay off, along with wall-clock-billed tools, via `EXCLUDED_PROVIDERS` and
 
 ```bash
 uv sync
-cp .env.example .env   # set GATEWAY_BRAND_NAME, MONID_API_KEY, X402_XRPL_PAYTO_ADDRESS
+cp .env.example .env   # set MONID_API_KEY and X402_XRPL_PAYTO_ADDRESS
 uv run uvicorn gateway.main:app --reload
 uv run pytest
 uv run python -m scripts.catalog_report   # sync the live catalog and summarise prices
@@ -95,7 +96,6 @@ The upstream is a local stand-in (`scripts/fake_monid.py`) unless
 
 ## Open items
 
-- `GATEWAY_BRAND_NAME`: undecided. Using "Monid" needs Monid's consent.
 - `X402_XRPL_PAYTO_ADDRESS`: not created yet. It needs an RLUSD trust line.
 - The invoice store is in memory, so run a single instance (or move it to Redis).
 - Showing all tools on XRPL AI Hub needs the Hub's large-catalog changes: pagination,

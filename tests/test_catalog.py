@@ -28,7 +28,10 @@ def test_excluded_providers_and_endpoints_are_dropped(tmp_path):
     assert [t.external_id for t in catalog.tools] == ["exa#/search"]
 
 
-def test_upstream_brand_is_removed_from_public_text(settings):
+def test_upstream_brand_is_removed_when_hiding_is_on(tmp_path):
+    from .conftest import make_settings
+
+    settings = make_settings(tmp_path, HIDE_UPSTREAM_BRAND=True)
     catalog = build_catalog(
         [
             endpoint(
@@ -45,10 +48,7 @@ def test_upstream_brand_is_removed_from_public_text(settings):
     assert catalog.tools[0].description.startswith("AI media from Magic Hour.")
 
 
-def test_brand_is_kept_when_hiding_is_off(tmp_path):
-    from .conftest import make_settings
-
-    settings = make_settings(tmp_path, HIDE_UPSTREAM_BRAND=False)
+def test_brand_is_kept_by_default(settings):
     catalog = build_catalog(
         [endpoint("magichour", "/gif", per_call(0), displayDescription="Monid's own FS")], [], settings
     )

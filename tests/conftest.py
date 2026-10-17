@@ -9,7 +9,7 @@ PAY_TO = "rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY"
 
 def make_settings(tmp_path, **overrides) -> Settings:
     values = {
-        "GATEWAY_BRAND_NAME": "Agent Tool Router",
+        "GATEWAY_BRAND_NAME": "Monid Tool Router",
         "PUBLIC_BASE_URL": "https://tools.example",
         "DATABASE_PATH": str(tmp_path / "gateway.sqlite3"),
         "CATALOG_SNAPSHOT_PATH": str(tmp_path / "catalog.json"),

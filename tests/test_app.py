@@ -136,7 +136,7 @@ async def test_probe_gets_rlusd_challenge_with_source_tag(tmp_path, upstream, fa
     assert req["extra"]["sourceTag"] == 804681468
     assert req["extra"]["crossCurrency"] is False
     assert challenge["resource"]["url"] == "https://tools.example/t/exa/search"
-    assert "Agent Tool Router" in challenge["resource"]["description"]
+    assert "Monid Tool Router" in challenge["resource"]["description"]
     assert upstream.runs == []
 
 
@@ -270,7 +270,7 @@ async def test_unknown_tool_is_404_not_402(tmp_path, upstream, facilitator):
 async def test_discovery_pages_through_the_catalog(tmp_path, upstream, facilitator):
     _, client = build(tmp_path, upstream, facilitator, CATALOG_PAGE_SIZE=2)
     first = (await client.get("/.well-known/x402")).json()
-    assert first["name"] == "Agent Tool Router"
+    assert first["name"] == "Monid Tool Router"
     assert first["total"] == 3 and first["pages"] == 2
     assert first["next"] == "https://tools.example/.well-known/x402?page=2"
     entry = first["resources"][0]

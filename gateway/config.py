@@ -65,14 +65,15 @@ class Settings(BaseSettings):
     PUBLIC_BASE_URL: str = "http://localhost:8000"
     DATABASE_PATH: str = "data/gateway.sqlite3"
 
-    # Brand shown to directories and buyers. Undecided, so it is a required variable.
-    GATEWAY_BRAND_NAME: str = ""
+    # Brand shown to directories and buyers. Like "Heurist Inference Router", the
+    # upstream's name plus what the gateway does.
+    GATEWAY_BRAND_NAME: str = "Monid Tool Router"
     GATEWAY_DESCRIPTION: str = (
-        "Pay-per-call data, search, social, commerce, finance and generative AI tools "
-        "for agents, settled in RLUSD on the XRP Ledger."
+        "Tool Router — Powered by Monid. Pay-per-call data, search, social, commerce, "
+        "finance and generative AI tools for agents, settled in RLUSD on the XRP Ledger."
     )
-    # Strip the upstream platform's name from public tool text.
-    HIDE_UPSTREAM_BRAND: bool = True
+    # Strip the upstream platform's name from public tool text (for a white-label brand).
+    HIDE_UPSTREAM_BRAND: bool = False
     UPSTREAM_BRAND_TERMS: str = "Monid"
 
     # Upstream (Monid). The catalog is public; running a tool needs the key.
