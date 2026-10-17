@@ -204,6 +204,8 @@ def main() -> int:
         "X402_XRPL_FACILITATOR_URL": FACILITATOR_URL,
         "X402_XRPL_PAYTO_ADDRESS": merchant_wallet.classic_address,
         "RUN_POLL_INTERVAL_SECONDS": "0.5",
+        # A test account may hold only the free credit; production keeps its own floor.
+        "MONID_MIN_BALANCE_USD": os.environ.get("E2E_MIN_BALANCE_USD", "0.05"),
     }
     procs.append(start("gateway.main:app", GATEWAY_PORT, gateway_env, WORK / "gateway.log"))
     try:
