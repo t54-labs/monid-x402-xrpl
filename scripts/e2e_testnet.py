@@ -4,8 +4,10 @@
 
 What is real: the gateway (uvicorn on localhost), the x402-xrpl payer, XRPL testnet,
 testnet RLUSD, and t54's testnet facilitator (verify + settle on-chain).
-What is a stand-in: the upstream API (scripts/fake_monid.py), since running real
-tools needs a paid key. Set E2E_REAL_UPSTREAM_KEY to run against the real upstream.
+What is a stand-in: the upstream API (scripts/fake_monid.py), unless real mode is on:
+E2E_REAL_UPSTREAM=1 uses MONID_API_KEY from .env (or E2E_REAL_UPSTREAM_KEY) and calls
+the real upstream, which spends a few cents of the prepaid balance. Real mode skips
+the async case and uses an invalid input for the not-charged case.
 
 Test wallets are created from the testnet faucet on first run and kept in
 E2E_WALLETS_PATH (default data/e2e-wallets.json, git-ignored). The payer buys a
@@ -38,7 +40,7 @@ from xrpl.transaction import submit_and_wait
 from xrpl.utils import xrp_to_drops
 from xrpl.wallet import Wallet, generate_faucet_wallet
 
-from gateway.config import RLUSD_CURRENCY_HEX, RLUSD_TESTNET_ISSUER, T54_FACILITATOR_SOURCE_TAG
+from gateway.config import RLUSD_CURRENCY_HEX, RLUSD_TESTNET_ISSUER, T54_FACILITATOR_SOURCE_TAG, Settings
 
 ROOT = Path(__file__).resolve().parent.parent
 RPC_URL = os.environ.get("E2E_RPC_URL", "https://s.altnet.rippletest.net:51234/")
@@ -49,6 +51,7 @@ CATALOG = os.environ.get("E2E_CATALOG", "")  # a catalog snapshot (scripts.catal
 GATEWAY_PORT, UPSTREAM_PORT = 8910, 8911
 GATEWAY = f"http://127.0.0.1:{GATEWAY_PORT}"
 TOOL = "/t/exa/search"
+REAL_INPUT = os.environ.get("E2E_REAL_INPUT", '{"query": "XRP Ledger agent payments", "numResults": 3}')
 PAYER_RLUSD_TARGET = Decimal("2")
 
 rpc = JsonRpcClient(RPC_URL)
@@ -156,6 +159,12 @@ def main() -> int:
         print("set E2E_CATALOG to a catalog snapshot (uv run python -m scripts.catalog_report writes one)")
         return 2
     real_key = os.environ.get("E2E_REAL_UPSTREAM_KEY", "")
+    if not real_key and os.environ.get("E2E_REAL_UPSTREAM") == "1":
+        real_key = Settings(_env_file=ROOT / ".env").MONID_API_KEY.strip()
+        if not real_key:
+            print("E2E_REAL_UPSTREAM=1 but MONID_API_KEY is not set in .env")
+            return 2
+    print(f"upstream: {'REAL (api.monid.ai)' if real_key else 'local stand-in'}", flush=True)
     if WORK.exists():
         shutil.rmtree(WORK)
     WORK.mkdir(parents=True)
@@ -204,7 +213,7 @@ def main() -> int:
             health["paymentsReady"] and health["tools"] > 0,
             f"{health['tools']} tools",
         )
-        run_checks(payer_wallet, merchant_wallet)
+        run_checks(payer_wallet, merchant_wallet, real=bool(real_key))
     finally:
         for proc in procs:
             proc.send_signal(signal.SIGINT)
@@ -219,7 +228,7 @@ def main() -> int:
     return 1 if failed else 0
 
 
-def run_checks(payer_wallet: Wallet, merchant_wallet: Wallet) -> None:
+def run_checks(payer_wallet: Wallet, merchant_wallet: Wallet, *, real: bool) -> None:
     payer = XRPLPresignedPaymentPayer(
         XRPLPresignedPaymentPayerOptions(wallet=payer_wallet, network="xrpl:1", rpc_url=RPC_URL)
     )
@@ -245,12 +254,14 @@ def run_checks(payer_wallet: Wallet, merchant_wallet: Wallet) -> None:
 
     # 2. Paid call that succeeds: settled on-chain.
     payer_before, merchant_before = rlusd_balance(payer_wallet.classic_address), rlusd_balance(merchant)
-    req, paid = pay_and_call(payer, TOOL, {"query": "xrpl agent payments"})
+    req, paid = pay_and_call(payer, TOOL, json.loads(REAL_INPUT) if real else {"query": "xrpl"})
     check(
         "paid call returns the tool output",
         paid.status_code == 200 and "output" in paid.json(),
         f"HTTP {paid.status_code}",
     )
+    if real:
+        print(f"  upstream output (first 300 chars): {json.dumps(paid.json())[:300]}", flush=True)
     check("upstream billing details are not exposed", "billing" not in paid.text and "hints" not in paid.text)
     settlement = (
         json.loads(base64.b64decode(paid.headers["PAYMENT-RESPONSE"]))
@@ -291,23 +302,30 @@ def run_checks(payer_wallet: Wallet, merchant_wallet: Wallet) -> None:
 
     # 3. Paid call whose upstream run fails: verified but never settled.
     payer_mid = rlusd_balance(payer_wallet.classic_address)
-    _, failed = pay_and_call(payer, TOOL, {"query": "fail"})
+    bad_input = {"definitelyNotAField": True} if real else {"query": "fail"}
+    _, failed = pay_and_call(payer, TOOL, bad_input)
     time.sleep(5)  # a settlement would have been validated by now
     check(
         "failed upstream run is not charged",
-        failed.status_code == 404
+        400 <= failed.status_code < 500
         and "PAYMENT-RESPONSE" not in failed.headers
         and rlusd_balance(payer_wallet.classic_address) == payer_mid,
         f"HTTP {failed.status_code}",
     )
 
     # 4. Async upstream run: polled, then settled.
-    _, slow = pay_and_call(payer, "/t/apify/apify/instagram-search-scraper", {"query": "slow", "limit": 2})
-    check(
-        "async run completes and settles",
-        slow.status_code == 200 and "PAYMENT-RESPONSE" in slow.headers,
-        f"HTTP {slow.status_code}",
-    )
+    if real:
+        expected = ["settled", "rejected_unbilled"]
+    else:
+        expected = ["settled", "failed_unbilled", "settled"]
+        _, slow = pay_and_call(
+            payer, "/t/apify/apify/instagram-search-scraper", {"query": "slow", "limit": 2}
+        )
+        check(
+            "async run completes and settles",
+            slow.status_code == 200 and "PAYMENT-RESPONSE" in slow.headers,
+            f"HTTP {slow.status_code}",
+        )
 
     # 5. The ledger recorded what happened.
     rows = (
@@ -316,7 +334,7 @@ def run_checks(payer_wallet: Wallet, merchant_wallet: Wallet) -> None:
         .fetchall()
     )
     states = [row[0] for row in rows]
-    check("run ledger states", states == ["settled", "failed_unbilled", "settled"], str(states))
+    check("run ledger states", states == expected, str(states))
     print(
         f"payer spent {payer_before - rlusd_balance(payer_wallet.classic_address)} RLUSD in total", flush=True
     )

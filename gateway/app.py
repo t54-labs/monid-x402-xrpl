@@ -215,6 +215,17 @@ def create_app(
 
         request.state.x402_on_settled = record_settlement
 
+        if not result.terminal and result.run_id is None:
+            # Rejected before any run started (bad input, auth, balance): nothing was
+            # done upstream, so nothing is charged.
+            await ledger.update(run_id, state="rejected_unbilled")
+            status = result.http_status if 400 <= result.http_status < 500 else 502
+            message = result.body.get("message") if status < 500 else "The tool could not be started."
+            return JSONResponse(
+                status_code=status,
+                content={"error": {"code": "upstream_rejected", "message": message}},
+            )
+
         if result.terminal:
             if not result.succeeded:
                 # Not charged: the upstream bills failed and empty runs at zero.

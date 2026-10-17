@@ -182,6 +182,18 @@ async def test_failed_upstream_run_is_not_charged(tmp_path, upstream, facilitato
     assert row["state"] == "failed_unbilled"
 
 
+async def test_rejected_upstream_request_is_not_charged(tmp_path, upstream, facilitator):
+    app, client = build(tmp_path, upstream, facilitator)
+    upstream.run_response = (400, {"code": 400, "message": "query is required"})
+    response = await paid_post(client, "/t/exa/search", {"q": "wrong field"})
+    assert response.status_code == 400
+    assert response.json()["error"]["message"] == "query is required"
+    assert "PAYMENT-RESPONSE" not in response.headers
+    assert facilitator.calls == ["/verify"]
+    row = app.state.ledger._conn.execute("SELECT state FROM runs").fetchone()
+    assert row["state"] == "rejected_unbilled"
+
+
 async def test_failed_settlement_withholds_output(tmp_path, upstream):
     facilitator = FakeFacilitator(settle_ok=False)
     app, client = build(tmp_path, upstream, facilitator)
