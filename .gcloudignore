@@ -1,0 +1,18 @@
+# Cloud Build uploads happen BEFORE Docker applies .dockerignore.
+# Keep this allowlist independent of .gitignore and never include .env or data/.
+**
+!.gcloudignore
+!.dockerignore
+!cloudbuild.yaml
+!Dockerfile
+!pyproject.toml
+!uv.lock
+!README.md
+!gateway/
+!gateway/*.py
+!gateway/**/*.py
+!scripts/
+!scripts/*.py
+!scripts/**/*.py
+**/__pycache__/
+**/*.pyc

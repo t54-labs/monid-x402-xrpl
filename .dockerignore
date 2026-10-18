@@ -1,0 +1,14 @@
+# Allowlist: never send local keys, wallets, ledgers, .git or .venv to Docker.
+**
+!Dockerfile
+!pyproject.toml
+!uv.lock
+!README.md
+!gateway/
+!gateway/*.py
+!gateway/**/*.py
+!scripts/
+!scripts/*.py
+!scripts/**/*.py
+**/__pycache__/
+**/*.pyc

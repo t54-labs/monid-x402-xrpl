@@ -1,0 +1,85 @@
+# Explicit LB health/timeout settings: the default 30s timeout is too short
+# for RUN_WAIT_SECONDS=240 plus upstream requests and facilitator settlement.
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: monid-gateway-backend
+  namespace: monid-gateway
+spec:
+  timeoutSec: 600
+  connectionDraining:
+    drainingTimeoutSec: 60
+  healthCheck:
+    checkIntervalSec: 10
+    timeoutSec: 2
+    healthyThreshold: 1
+    unhealthyThreshold: 3
+    type: HTTP
+    requestPath: /health
+    port: 8000
+  # Optional, AFTER an operator provisions and reviews a rate-limit policy:
+  # securityPolicy:
+  #   name: REPLACE_WITH_MONID_TESTNET_ARMOR_POLICY
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: monid-gateway
+  namespace: monid-gateway
+  annotations:
+    cloud.google.com/neg: '{"ingress": true}'
+    cloud.google.com/backend-config: '{"default":"monid-gateway-backend"}'
+spec:
+  type: ClusterIP
+  selector:
+    app: monid-gateway
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: monid-gateway-cert
+  namespace: monid-gateway
+spec:
+  domains:
+    - monid-testnet.example.invalid
+---
+apiVersion: networking.gke.io/v1beta1
+kind: FrontendConfig
+metadata:
+  name: monid-gateway-frontend
+  namespace: monid-gateway
+spec:
+  redirectToHttps:
+    enabled: true
+    responseCodeName: PERMANENT_REDIRECT
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: monid-gateway
+  namespace: monid-gateway
+  annotations:
+    kubernetes.io/ingress.class: gce
+    kubernetes.io/ingress.global-static-ip-name: REPLACE_WITH_RESERVED_TESTNET_IP_NAME
+    networking.gke.io/managed-certificates: monid-gateway-cert
+    networking.gke.io/v1beta1.FrontendConfig: monid-gateway-frontend
+    # Leave HTTP enabled for certificate setup and redirect; never send payment
+    # headers or bodies over HTTP. Agents must start with PUBLIC_BASE_URL (HTTPS).
+    kubernetes.io/ingress.allow-http: 'true'
+spec:
+  rules:
+    - host: monid-testnet.example.invalid
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: monid-gateway
+                port:
+                  number: 80

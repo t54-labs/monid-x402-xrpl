@@ -124,3 +124,10 @@ The upstream is a local stand-in (`scripts/fake_monid.py`) unless
 - The invoice store is in memory, so run a single instance (or move it to Redis).
 - Showing all tools on XRPL AI Hub needs the Hub's large-catalog changes: pagination,
   async import, and per-merchant limits.
+
+## Deployment
+
+See [the GKE testnet runbook](deploy/README.md) for Cloud Build, persistent storage,
+HTTPS, out-of-band Secret provisioning, probes, rollout and recovery constraints.
+The checked-in templates require an approved domain, static IP and immutable image;
+they do not deploy automatically or establish mainnet readiness.
