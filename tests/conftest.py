@@ -7,6 +7,22 @@ from gateway.config import RLUSD_TESTNET_ISSUER, Settings
 PAY_TO = "rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY"
 
 
+@pytest.fixture(autouse=True)
+def offline_only(monkeypatch):
+    """The unit suite must never contact Monid, a facilitator, or any network."""
+    import socket
+
+    def blocked(*args, **kwargs):
+        raise AssertionError("Outbound network is disabled in unit tests")
+
+    monkeypatch.setattr(socket.socket, "connect", blocked)
+    monkeypatch.setattr(socket.socket, "connect_ex", blocked)
+    monkeypatch.setattr(socket, "getaddrinfo", blocked)
+
+    # Defend against accidentally constructing Settings() with the developer's .env.
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+
+
 def make_settings(tmp_path, **overrides) -> Settings:
     values = {
         "GATEWAY_BRAND_NAME": "Monid Tool Router",
