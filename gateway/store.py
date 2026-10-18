@@ -26,6 +26,22 @@ CREATE TABLE IF NOT EXISTS runs (
     updated_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS runs_invoice ON runs (invoice_id);
+CREATE TABLE IF NOT EXISTS invoices (
+    id TEXT PRIMARY KEY,
+    requirements TEXT NOT NULL,
+    binding TEXT NOT NULL,
+    target TEXT NOT NULL,
+    expires_at REAL NOT NULL,
+    state TEXT NOT NULL DEFAULT 'quoted',
+    payment_hash TEXT,
+    run_id TEXT UNIQUE,
+    response_status INTEGER,
+    response_body BLOB,
+    response_headers TEXT,
+    settlement TEXT,
+    reconciliation TEXT,
+    updated_at REAL NOT NULL
+);
 """
 
 COLUMNS = (
@@ -53,14 +69,24 @@ class RunLedger:
         self._lock = asyncio.Lock()
 
     async def _run(self, sql: str, params: tuple[Any, ...]) -> list[sqlite3.Row]:
-        async with self._lock:
-            return await asyncio.to_thread(self._execute, sql, params)
+        return (await self.transaction([(sql, params)]))[0]
 
-    def _execute(self, sql: str, params: tuple[Any, ...]) -> list[sqlite3.Row]:
-        cursor = self._conn.execute(sql, params)
-        rows = cursor.fetchall()
-        self._conn.commit()
-        return rows
+    async def transaction(
+        self, statements: list[tuple[str, tuple[Any, ...]]]
+    ) -> list[list[sqlite3.Row]]:
+        async with self._lock:
+            task = asyncio.create_task(asyncio.to_thread(self._execute, statements))
+            try:
+                return await asyncio.shield(task)
+            except asyncio.CancelledError:
+                # A cancelled caller must not release the connection while its
+                # worker is still committing a security-critical transition.
+                await task
+                raise
+
+    def _execute(self, statements: list[tuple[str, tuple[Any, ...]]]) -> list[list[sqlite3.Row]]:
+        with self._conn:
+            return [self._conn.execute(sql, params).fetchall() for sql, params in statements]
 
     async def create(self, run_id: str, **fields: Any) -> None:
         now = time.time()

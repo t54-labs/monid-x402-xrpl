@@ -43,7 +43,9 @@ class FakeFacilitator:
                     "transaction": "ABC123" if self.settle_ok else "",
                     "network": "xrpl:1",
                     "payer": "rBuyer",
-                    **({} if self.settle_ok else {"errorReason": "insufficient_funds"}),
+                    **({} if self.settle_ok else {
+                        "errorReason": "insufficient_funds", "settlementAttempted": False,
+                    }),
                 },
             )
         return httpx.Response(404)
