@@ -72,6 +72,7 @@ async def settle_payment(
     invoices: InvoiceStore,
     resource_url: str,
     description: str,
+    allow_unsubmitted_retry: bool = False,
 ) -> tuple[dict[str, Any] | None, Response | None]:
     """Settle a verified payment. Returns (settlement, None) or (None, error response)."""
     payload = PaymentPayload.from_dict(json.loads(base64.b64decode(signature)))
@@ -102,7 +103,8 @@ async def settle_payment(
         # These are the SDK's legacy ambiguous submission/validation outcomes.
         # Only a documented pre-submission rejection is automatically retryable.
         if (
-            settlement.get("settlementAttempted") is not False
+            not allow_unsubmitted_retry
+            or settlement.get("settlementAttempted") is not False
             or reason != "insufficient_funds"
             or settlement.get("transaction")
         ):
@@ -314,6 +316,7 @@ def register_payment_middleware(
             invoices=invoices,
             resource_url=f"{settings.PUBLIC_BASE_URL.rstrip('/')}{path}",
             description=settings.brand_name,
+            allow_unsubmitted_retry=settings.X402_ALLOW_UNSUBMITTED_RETRY,
         )
         if failure is not None:
             state = "ready" if failure.status_code == 402 else "settlement_unknown"

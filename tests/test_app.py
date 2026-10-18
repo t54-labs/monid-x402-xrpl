@@ -95,6 +95,9 @@ def facilitator() -> FakeFacilitator:
 
 
 def build(tmp_path, upstream, facilitator, **overrides):
+    # This fake explicitly models a reviewed no-submission contract. Production
+    # defaults stay closed; separate regressions exercise that default via routes.
+    overrides.setdefault("X402_ALLOW_UNSUBMITTED_RETRY", True)
     settings = make_settings(tmp_path, **overrides)
     save_snapshot(settings.CATALOG_SNAPSHOT_PATH, ENDPOINTS, [], "2026-10-17T00:00:00Z")
     upstream_client = httpx.AsyncClient(transport=httpx.MockTransport(upstream.handler))

@@ -674,3 +674,121 @@ async def test_settlement_and_run_ledger_commit_atomically(tmp_path, upstream):
     response = await client.post("/t/exa/search", json={"query": "xrpl"}, headers=headers)
     assert response.status_code == 409 and len(upstream.runs) == 1
     assert facilitator.calls == ["/verify", "/settle"]
+
+
+async def test_production_default_reconciles_even_claimed_non_submission(tmp_path, upstream):
+    from .conftest import make_settings
+
+    assert make_settings(tmp_path).X402_ALLOW_UNSUBMITTED_RETRY is False
+    facilitator = FakeFacilitator(settle_ok=False)
+    app, client = build(tmp_path, upstream, facilitator, X402_ALLOW_UNSUBMITTED_RETRY=False)
+    headers = await signed_request(client)
+    first = await client.post("/t/exa/search", json={"query": "xrpl"}, headers=headers)
+    assert first.status_code == 409 and "output" not in first.json()
+    app.state.ledger.close()
+    _, client = build(tmp_path, upstream, facilitator, X402_ALLOW_UNSUBMITTED_RETRY=False)
+    replay = await client.post("/t/exa/search", json={"query": "xrpl"}, headers=headers)
+    assert replay.status_code == 409
+    assert len(upstream.runs) == 1 and facilitator.calls == ["/verify", "/settle"]
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "verify_failed:invalid_payload",
+        "submit_failed:timeout",
+        "submit_missing_tx_hash",
+        "submit_engine_result:tecUNFUNDED_PAYMENT:unfunded",
+        "validation_failed:validation_timeout",
+        "tx_failed:tecUNFUNDED_PAYMENT",
+    ],
+)
+async def test_available_facilitator_failure_shapes_are_closed(tmp_path, upstream, reason):
+    import httpx
+
+    facilitator = FakeFacilitator()
+    original = facilitator.post
+
+    async def post(path, json):
+        if path == "/settle":
+            facilitator.calls.append(path)
+            return httpx.Response(
+                200,
+                json={
+                    "success": False,
+                    "errorReason": reason,
+                    "transaction": "",
+                    "network": "xrpl:1",
+                    "payer": "rBuyer",
+                },
+            )
+        return await original(path, json)
+
+    facilitator.post = post
+    # Even an explicitly enabled future contract cannot reinterpret these legacy shapes.
+    _, client = build(tmp_path, upstream, facilitator, X402_ALLOW_UNSUBMITTED_RETRY=True)
+    headers = await signed_request(client)
+    for _ in range(2):
+        response = await client.post("/t/exa/search", json={"query": "xrpl"}, headers=headers)
+        assert response.status_code == 409 and "output" not in response.json()
+    assert len(upstream.runs) == 1 and facilitator.calls == ["/verify", "/settle"]
+
+
+@pytest.mark.parametrize("state", ["quoted", "executing", "ready", "unbilled", "settled"])
+async def test_reconciliation_refuses_known_or_unexecuted_states(tmp_path, upstream, state):
+    facilitator = FakeFacilitator()
+    app, client = build(tmp_path, upstream, facilitator)
+    headers = await signed_request(client)
+    paid = await client.post("/t/exa/search", json={"query": "xrpl"}, headers=headers)
+    assert paid.status_code == 200
+    invoice_id = decode_header(headers["PAYMENT-SIGNATURE"])["payload"]["invoiceId"]
+    await app.state.ledger._run("UPDATE invoices SET state = ? WHERE id = ?", (state, invoice_id))
+    before_invoice = await app.state.x402_invoices.record(invoice_id)
+    before_run = dict(app.state.ledger._conn.execute("SELECT * FROM runs").fetchone())
+    with pytest.raises(ValueError, match="Only an unknown settlement"):
+        await app.state.x402_invoices.reconcile(invoice_id, evidence="synthetic-proof", settlement=None)
+    assert await app.state.x402_invoices.record(invoice_id) == before_invoice
+    assert dict(app.state.ledger._conn.execute("SELECT * FROM runs").fetchone()) == before_run
+    assert facilitator.calls == ["/verify", "/settle"] and len(upstream.runs) == 1
+
+
+@pytest.mark.parametrize(
+    "field, value",
+    [
+        ("amount", "999"),
+        ("network", "xrpl:0"),
+        ("asset", "XRP"),
+        ("payTo", "rAnotherAddress"),
+        ("maxTimeoutSeconds", 100),
+        ("sourceTag", 999),
+        ("issuer", "rWrongIssuer"),
+    ],
+)
+async def test_issued_requirements_cannot_be_changed_before_execution(tmp_path, upstream, field, value):
+    import base64
+    import json
+
+    facilitator = FakeFacilitator()
+    _, client = build(tmp_path, upstream, facilitator)
+    original = await signed_request(client)
+    envelope = decode_header(original["PAYMENT-SIGNATURE"])
+    requirements = envelope["accepted"]
+    (requirements["extra"] if field in ("sourceTag", "issuer") else requirements)[field] = value
+    forged = base64.b64encode(json.dumps(envelope).encode()).decode()
+    response = await client.post(
+        "/t/exa/search", json={"query": "xrpl"}, headers={"PAYMENT-SIGNATURE": forged}
+    )
+    assert response.status_code == 409
+    assert facilitator.calls == [] and upstream.runs == []
+    # A forged attempt cannot consume or pin the legitimate quote.
+    assert (await client.post("/t/exa/search", json={"query": "xrpl"}, headers=original)).status_code == 200
+    assert len(upstream.runs) == 1
+
+
+@pytest.mark.parametrize("bad", ["not-base64-json", "bnVsbA==", "W10=", "e30="])
+async def test_malformed_payment_never_claims_execution(tmp_path, upstream, bad):
+    facilitator = FakeFacilitator()
+    _, client = build(tmp_path, upstream, facilitator)
+    response = await client.post("/t/exa/search", json={"query": "xrpl"}, headers={"PAYMENT-SIGNATURE": bad})
+    assert response.status_code == 400
+    assert upstream.runs == [] and facilitator.calls == []

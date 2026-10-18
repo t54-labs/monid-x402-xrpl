@@ -76,13 +76,21 @@ class RunLedger:
     ) -> list[list[sqlite3.Row]]:
         async with self._lock:
             task = asyncio.create_task(asyncio.to_thread(self._execute, statements))
-            try:
-                return await asyncio.shield(task)
-            except asyncio.CancelledError:
-                # A cancelled caller must not release the connection while its
-                # worker is still committing a security-critical transition.
-                await task
-                raise
+            cancelled = False
+            while True:
+                try:
+                    result = await asyncio.shield(task)
+                    break
+                except asyncio.CancelledError:
+                    # Repeated cancellation must not cancel the worker future or
+                    # release this lock before its real thread commits/rolls back.
+                    cancelled = True
+                    if task.done():
+                        result = task.result()
+                        break
+            if cancelled:
+                raise asyncio.CancelledError
+            return result
 
     def _execute(self, statements: list[tuple[str, tuple[Any, ...]]]) -> list[list[sqlite3.Row]]:
         with self._conn:

@@ -109,6 +109,9 @@ class Settings(BaseSettings):
     X402_XRPL_ISSUER: str = RLUSD_TESTNET_ISSUER
     X402_SOURCE_TAG: int | None = T54_FACILITATOR_SOURCE_TAG
     X402_MAX_TIMEOUT_SECONDS: int = Field(default=600, ge=60, le=3600)
+    # Enable only after auditing this facilitator's explicit no-submission contract.
+    # The pinned SDK and available facilitator source do not establish that contract.
+    X402_ALLOW_UNSUBMITTED_RETRY: bool = False
 
     # Async upstream runs: how long the paid request waits before handing back a job.
     RUN_WAIT_SECONDS: float = Field(default=240.0, ge=0)

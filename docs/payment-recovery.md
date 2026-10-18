@@ -20,14 +20,23 @@ delivery; knowing an invoice ID alone cannot retrieve a cached response.
 | `settlement_unknown` | Timeout, malformed response, HTTP error, or ambiguous outcome | `409 settlement_status_unknown`; reconcile |
 | `settled` | Successful settlement and ledger update committed atomically | Return original public response and PAYMENT-RESPONSE |
 
-Only an HTTP 200 response with `success: false`, the invoice's network,
+By default **every failed settlement requires reconciliation**, including a response
+claiming non-submission. `X402_ALLOW_UNSUBMITTED_RETRY` defaults to `false`. Enable it
+only after independently confirming the deployed facilitator's no-submission contract.
+When explicitly enabled, only an HTTP 200 response with `success: false`, the invoice's network,
 `errorReason: insufficient_funds`, `settlementAttempted: false` and no transaction
 is treated as an explicit pre-submission rejection. It returns the original 402
 requirements and moves `settling` back to `ready`. All other failed settlement
 responses require reconciliation, including legacy responses without proof of
 non-submission and `submit_failed:*`, `submit_missing_tx_hash`, `validation_failed:*`.
-Confirm the facilitator's no-submission contract before enabling unattended retries
-in production; do not add ambiguous failures to this allowlist.
+Do not add ambiguous failures to this allowlist. Inspection of the installed
+`x402-xrpl==0.3.4` SDK and available local facilitator source at
+`2260d956cd6b304a8a52e2f723881e66b66c82c0` did not establish this contract:
+the facilitator's settlement model does not expose `settlementAttempted`, and
+failures include `submit_failed:*`, `submit_engine_result:*`, `validation_failed:*`
+and `tx_failed:*`. This source is not proof of what is currently deployed. Keep the
+default until deployment-specific semantics have been reviewed; otherwise use
+explicit offline reconciliation before any settlement retry.
 
 Keep and resend the original payment envelope and input. A newly signed transaction
 for an already executed invoice is rejected; support must reconcile the original
@@ -85,7 +94,7 @@ charge or upstream purchase.
 4. Only after proving settlement, record the confirmed transaction and payer:
 
    ```bash
-   python -m scripts.reconcile_invoice --database /persistent/gateway.sqlite3 \
+   python -m gateway.reconcile --database /persistent/gateway.sqlite3 \
      --invoice INVOICE_ID --outcome settled --transaction CONFIRMED_TX_HASH \
      --payer CONFIRMED_PAYER --evidence INCIDENT_REFERENCE --gateway-stopped
    ```
@@ -94,7 +103,7 @@ charge or upstream purchase.
    still complete, explicitly permit **settlement-only** retry:
 
    ```bash
-   python -m scripts.reconcile_invoice --database /persistent/gateway.sqlite3 \
+   python -m gateway.reconcile --database /persistent/gateway.sqlite3 \
      --invoice INVOICE_ID --outcome not-settled \
      --evidence INCIDENT_REFERENCE --gateway-stopped
    ```
