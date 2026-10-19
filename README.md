@@ -145,6 +145,6 @@ catalog/result snapshots, logs or databases; the build upload allowlists exclude
 
 ## License and source information
 
-See the [MIT release license proposal](docs/license-plan.md),
+Licensed under [MIT](LICENSE). See [licensing details](docs/licensing.md),
 [source provenance](docs/provenance.md), [third-party notices](THIRD_PARTY_NOTICES.md)
-and [release checklist](docs/open-source-release.md).
+and the [release checklist](docs/open-source-release.md).

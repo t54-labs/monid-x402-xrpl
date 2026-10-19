@@ -1,8 +1,8 @@
 # Third-party notices and dependency inventory
 
 This file acknowledges dependencies and reference projects. T54 has authorized
-open-sourcing this gateway. The concrete MIT license proposal is in
-[the license plan](docs/license-plan.md); source attribution is recorded in
+open-sourcing this gateway under [MIT](LICENSE). See
+[licensing details](docs/licensing.md); source attribution is recorded in
 [provenance](docs/provenance.md). Third-party components retain their own licenses.
 
 ## References and supplier material
@@ -44,7 +44,7 @@ verify the actual image and target-platform bundled libraries before publication
 Source: `uv.lock` at assessed base `6221d9241b0433fa881afb296a2c3cf59319fb0f`.
 65 matching installed distributions were inspected read-only (METADATA and selected
 license texts); the three platform/conditional entries absent locally were checked
-against their exact PyPI release pages. The build-system requirement `setuptools>=69`
+against their exact PyPI release pages. The build-system requirement `setuptools>=77`
 is not pinned in this lock and is outside these 68 rows. Docker base images,
 OS packages, uv and bundled native-library subcomponents need a separate inventory
 for an actual distributable image. No complete license compatibility opinion or
@@ -121,6 +121,6 @@ supply-chain/vulnerability audit is implied.
 | [x402-xrpl](https://pypi.org/project/x402-xrpl/0.3.4/) | 0.3.4 | MIT (verified installed LICENSE) |
 | [xrpl-py](https://pypi.org/project/xrpl-py/5.2.0/) | 5.2.0 | ISC |
 
-Apply the selected release license consistently to the root license file, package
-metadata and artifacts using `docs/license-plan.md`. Preserve applicable third-party
-notices. This inventory is shipped in the sdist, wheel and container.
+The project MIT license is included in source/package/image artifacts as described
+in `docs/licensing.md`. Preserve applicable third-party notices. This inventory is
+shipped in the sdist, wheel and container.

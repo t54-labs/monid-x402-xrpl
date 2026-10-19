@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +7,8 @@ name = "monid-x402-xrpl"
 version = "0.1.0"
 description = "x402 gateway that sells upstream agent tools for RLUSD on the XRP Ledger"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.11,<3.14"
 dependencies = [
   "fastapi>=0.115,<0.116",
@@ -20,8 +22,6 @@ dependencies = [
 [project.urls]
 Repository = "https://github.com/t54-labs/monid-x402-xrpl"
 Issues = "https://github.com/t54-labs/monid-x402-xrpl/issues"
-
-# Release license text and package metadata plan: docs/license-plan.md.
 
 [tool.setuptools.data-files]
 "share/doc/monid-x402-xrpl" = ["THIRD_PARTY_NOTICES.md"]
