@@ -21,7 +21,7 @@ dependencies = [
 Repository = "https://github.com/t54-labs/monid-x402-xrpl"
 Issues = "https://github.com/t54-labs/monid-x402-xrpl/issues"
 
-# Project license intentionally awaits T54 approval; see docs/open-source-release.md.
+# Release license text and package metadata plan: docs/license-plan.md.
 
 [tool.setuptools.data-files]
 "share/doc/monid-x402-xrpl" = ["THIRD_PARTY_NOTICES.md"]

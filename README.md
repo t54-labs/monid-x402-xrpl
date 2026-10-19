@@ -1,10 +1,5 @@
 # monid-x402-xrpl
 
-Release preparation is in progress. T54 has not yet approved an open-source
-license for this gateway. See the [release decisions and checklist](docs/open-source-release.md),
-[source provenance](docs/provenance.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
-Third-party license notices do not grant a license to the gateway itself.
-
 An x402 gateway that sells the upstream tool catalog (Monid: about 2,600 agent tools
 from about 90 providers) for **RLUSD on the XRP Ledger**. Agents pay us per call in
 RLUSD; we run the tool with our own prepaid upstream key and return the result.
@@ -147,3 +142,9 @@ project, image, receiving-address and domain placeholders. They are not an appro
 deployment plan. Review payment recovery, persistent storage and the separate
 release gates before operating a paid service. Never commit `.env`, wallet seeds,
 catalog/result snapshots, logs or databases; the build upload allowlists exclude them.
+
+## License and source information
+
+See the [MIT release license proposal](docs/license-plan.md),
+[source provenance](docs/provenance.md), [third-party notices](THIRD_PARTY_NOTICES.md)
+and [release checklist](docs/open-source-release.md).

@@ -3,6 +3,9 @@
 `examples/gke/` is a sanitized adaptation of the candidate configuration from
 commit `74e4e52d5ec01f3c58015a9f26ed83508a2fd85a`. It is provided for review, not
 for direct deployment. No existing Railway or GCP environment is described here.
+The [operator runbook](runbook.md) preserves the useful procedures from PR #1,
+updated for durable invoices. The [overlap analysis](../docs/pr-1-overlap.md)
+explains the relocated paths and why PR #1 should not also be merged unchanged.
 
 Before considering GKE, an operator must supply and review:
 

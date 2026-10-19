@@ -1,18 +1,18 @@
 # Third-party notices and dependency inventory
 
-This file acknowledges dependencies and reference projects. It **does not grant a
-license to monid-x402-xrpl** or establish T54's ownership of reference code. The
-proposed project license remains pending approval; see
-[release decisions](docs/open-source-release.md) and [provenance](docs/provenance.md).
+This file acknowledges dependencies and reference projects. T54 has authorized
+open-sourcing this gateway. The concrete MIT license proposal is in
+[the license plan](docs/license-plan.md); source attribution is recorded in
+[provenance](docs/provenance.md). Third-party components retain their own licenses.
 
 ## References and supplier material
 
 T54's `xrpl-x402-inference-provider` and `ask-surf-x402` projects informed the
-integration review. Their exact snapshots, comparison evidence and unresolved
-permission/notice requirements are recorded in `docs/provenance.md`. In particular,
-the former has no declared license, and an MIT declaration in the latter does not
-supply the missing copyright holder/complete grant. Confirm the actual source reuse
-and required notices before licensing or publishing this gateway.
+integration review. Their exact snapshots and comparison evidence are recorded in
+`docs/provenance.md`. The inference reference has no declared license; the ask-surf
+reference declares MIT without a root license text. The gateway's release does not
+change those repositories' licenses or replace notices for separate third-party
+libraries included there.
 
 Monid service access, catalog/result data, its name/logo, and provider logos are
 subject to their own rights and terms. Referencing their URLs does not relicense
@@ -121,7 +121,6 @@ supply-chain/vulnerability audit is implied.
 | [x402-xrpl](https://pypi.org/project/x402-xrpl/0.3.4/) | 0.3.4 | MIT (verified installed LICENSE) |
 | [xrpl-py](https://pypi.org/project/xrpl-py/5.2.0/) | 5.2.0 | ISC |
 
-The project's own license/copyright statement must be added only after T54 approval.
-Rebuild artifacts after that change and confirm both the project grant and all
-applicable third-party notices are included. This file is intentionally shipped
-in the sdist, wheel and container for reviewers and downstream operators.
+Apply the selected release license consistently to the root license file, package
+metadata and artifacts using `docs/license-plan.md`. Preserve applicable third-party
+notices. This inventory is shipped in the sdist, wheel and container.

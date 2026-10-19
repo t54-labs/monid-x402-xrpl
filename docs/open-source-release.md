@@ -1,28 +1,22 @@
-# Open-source release decisions and checklist
+# Open-source release checklist
 
-Status: **preparation only; not approved for public release**. The assessed base is
-`6221d9241b0433fa881afb296a2c3cf59319fb0f`; the repository was private on 2026-10-19.
-Merging this preparation PR does not approve publication, ownership, licensing or
-production deployment. No LICENSE or active project license declaration is added.
+T54 has approved open-sourcing the gateway, as confirmed on 2026-10-19. The assessed
+base is `6221d9241b0433fa881afb296a2c3cf59319fb0f`; repository visibility was private
+at inspection. Code publication and a production deployment are separate actions.
 
-## Decisions requiring T54 approval
+## Release packaging
 
-- [ ] Confirm T54 has the necessary employee, contractor and contributor rights.
-- [ ] Resolve reference-project reuse and notices in [provenance](provenance.md),
-  particularly the inference template with no declared license. Obtain the actual
-  copyright/permission notice for any MIT template code retained.
-- [ ] Select the gateway license. **MIT is the proposed candidate** for this small
-  gateway and is consistent with the pinned x402 SDK, provided T54 controls the
-  gateway source and clears the references. **Apache-2.0** is an alternative if T54
-  wants an explicit patent grant. This proposal grants neither license. After
-  approval, a separate reviewed change must add the exact LICENSE/copyright,
-  `project.license`/license-files metadata and matching README text, and verify the
-  license appears in the sdist, wheel and image.
-- [ ] Approve Monid branding, supplier-logo display and any co-branded material;
-  confirm hosted-service and data rights separately from the code license.
-- [ ] Decide whether existing operational identifiers and personal paths in history
-  may become public; do not treat this PR's sanitized files as historical removal.
-- [ ] Approve the actual public-release scope and a separate visibility change.
+- [x] Organization authorization to open-source is confirmed.
+- [x] Record source references and third-party license evidence in
+  [provenance](provenance.md) and the root third-party notices.
+- [ ] Apply the final release license consistently. The complete
+  [MIT text and exact packaging changes](license-plan.md) are prepared for selection;
+  the source proposal is distinct from an installed package license declaration.
+- [ ] Preserve supplier/third-party rights. Monid's proxy documentation supports
+  user billing, but catalog/results, logos and co-branded artwork retain their own
+  applicable terms; code publication does not relicense them.
+- [ ] Record how the non-secret historical metadata below will be handled. Updating
+  current files does not remove it from existing refs, commits or external copies.
 
 ## Historical disclosure choices — no history has been changed
 
@@ -36,9 +30,9 @@ checkout names; the assessed main includes them at
 `6221d9241b0433fa881afb296a2c3cf59319fb0f`. Values are intentionally omitted here.
 No real credential was identified in the assessed tracked history.
 
-T54 can choose one of these explicit paths:
+The release can use one of these historical-content approaches:
 
-1. Approve these non-secret historical disclosures and retain the existing history.
+1. Retain the existing history, including these non-secret historical disclosures.
 2. Publish a separately reviewed sanitized snapshot in a **new** repository, keeping
    the original private. Audit that new repository and its complete contents first.
 3. Authorize a coordinated history rewrite and reference cleanup. This needs a
@@ -80,7 +74,7 @@ locally from a checksum-verified official release; its scan remains a static
 heuristic check, not a guarantee that no secret exists or a vulnerability audit.
 The root `.gitleaks.toml` extends the scanner's built-in rules with XRPL seed
 candidates; it does not treat public `r` addresses as keys. A reproducible command
-after fetching the approved full ref set into an isolated mirror is:
+after fetching the full advertised ref set into an isolated mirror is:
 
 ```bash
 gitleaks git /path/to/isolated-mirror.git --config /path/to/checkout/.gitleaks.toml \

@@ -1,8 +1,8 @@
 # Release preparation validation — 2026-10-19
 
-Base: `6221d9241b0433fa881afb296a2c3cf59319fb0f`. These are local preparation
-checks, not approval to publish or a production deployment validation. The final
-preparation commit and its history scan result are reported in the draft PR.
+Base: `6221d9241b0433fa881afb296a2c3cf59319fb0f`. T54 has confirmed open-source
+publication. These are local technical checks, separate from production deployment
+validation. The final preparation commit and history scan are reported in the PR.
 
 | Check | Result |
 | --- | --- |
@@ -10,15 +10,16 @@ preparation commit and its history scan result are reported in the draft PR.
 | Existing remote history | Gitleaks 8.30.1, official checksum-verified binary; built-in rules plus XRPL seed candidates; 6 advertised branch/PR refs, 14 reachable commits, 86 unique blobs, 0 findings; see JSON evidence |
 | Offline unit suite | `pytest -q`: 124 passed; network/DNS blocked by suite; dotenv disabled |
 | Lint and patch whitespace | `ruff check .` and `git diff --check`: passed |
-| Source/wheel build | `uv build --offline`: passed using cached build dependencies; no project license assigned |
+| Source/wheel build | `uv build --offline`: passed using cached build dependencies; the MIT proposal text is included in the source distribution; final license-adoption checks are listed separately in `docs/license-plan.md` |
 | Artifact boundary checker | sdist/wheel paths checked; third-party notices present; seven unsafe/private-path rejection cases passed |
 | Packaged smoke | All ten gateway modules imported from built wheel; five mocked route checks and two reconciliation CLI checks passed; network/dotenv disabled |
 | Docker transmitted context | Actual BuildKit scratch/COPY context export: 26 source/build files; all seven synthetic canaries absent |
 | GCloud upload list | `gcloud meta list-files-for-upload` with an isolated local config: 30 build files; all seven canaries absent; build example present, GKE manifests absent |
-| Image build | Local Docker build passed; review image `sha256:c7de550da5c6642b5f30ca585de601b4ababb04b29894713ce0b8aa0e8f482fa` |
+| Image build | Local Docker rebuild passed after the publication-wording revision; review image `sha256:f74f184eb1aa7e21c848ea28664b18cd07fc0480359cbb3b3aee64629dd1a410` |
 | Image smoke | Read-only container, `--network none`, blocked sockets, tmpfs-only runtime data: gateway import passed; no dotenv/PEM canary; root third-party notices present |
 | Image dependency notices | License files present for x402-xrpl, xrpl-py, certifi, psycopg and psycopg-binary; not a full binary/OS license audit |
 | Examples | Eight YAML files parsed; `kubectl kustomize deploy/examples/gke` rendered offline; personal paths, original project identifier and operator receiver absent from example files |
+| PR #1 overlap | Seven resource files matched after the documented identifier/default changes; detailed operational guidance consolidated in `deploy/runbook.md`; simulated branch merge reported four conflicts, without changing the working tree |
 | Dependency inventory | All 68 locked third-party entries covered by installed exact-version metadata or exact PyPI release metadata; build backend and base-image/OS/native subcomponents separately scoped |
 | Original worktree | Status unchanged; no production configuration or service modified |
 
