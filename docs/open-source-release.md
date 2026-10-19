@@ -9,9 +9,8 @@ at inspection. Code publication and a production deployment are separate actions
 - [x] Organization authorization to open-source is confirmed.
 - [x] Record source references and third-party license evidence in
   [provenance](provenance.md) and the root third-party notices.
-- [ ] Apply the final release license consistently. The complete
-  [MIT text and exact packaging changes](license-plan.md) are prepared for selection;
-  the source proposal is distinct from an installed package license declaration.
+- [x] Apply the selected [MIT License](../LICENSE), PEP 639 package metadata and
+  source/wheel/image inclusion rules; see [licensing details](licensing.md).
 - [ ] Preserve supplier/third-party rights. Monid's proxy documentation supports
   user billing, but catalog/results, logos and co-branded artwork retain their own
   applicable terms; code publication does not relicense them.

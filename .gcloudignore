@@ -12,6 +12,7 @@ deploy/examples/*
 !pyproject.toml
 !uv.lock
 !README.md
+!LICENSE
 !THIRD_PARTY_NOTICES.md
 !gateway/
 gateway/*

@@ -40,19 +40,35 @@ and `deploy/gke/` are intentionally not reintroduced as active deployment entrie
   `scripts.e2e_testnet` defaults to a fake upstream. Real-upstream mode and
   call-tool against a paid service can spend credits; neither was run here.
 
-## Minimal handling
+## Integration of both PRs
 
-Use PR #3's updated examples and runbook. Do not also merge PR #1 unchanged: it
-would restore stale descriptions and original identifiers, duplicate old/new
-deployment paths and overlap the safer ignore files. No unique functional change
-now needs a separate cherry-pick from #1. The coordinator can mark #1 superseded
-after accepting the replacement; this work does not close or delete it.
+The user selected MIT and authorized merging both PRs after verification. A normal
+local merge first incorporated main (including PR #2) into the deployment branch,
+then merged the release-preparation branch. The resulting combined commit is
+`9b87386e665f5605bc531ac8f8a965c18c0a6ca0`. Both original PR heads remain ancestors;
+no ours merge strategy, force-push or history rewrite is used.
+
+The four overlapping files use the reviewed PR #3 versions. The obsolete root
+`cloudbuild.yaml` and `deploy/gke/` files are explicitly removed because their
+contents have been relocated and sanitized under `deploy/examples/`. The combined
+tree before the final MIT changes exactly matches the reviewed PR #3 tree. Thus
+the integration preserves history without restoring stale payment descriptions,
+old operational identifiers or duplicate deployment entries.
+
+The final MIT/package-verification commit builds on that combined tree. Update
+PR #3 to that later commit before updating/merging PR #1, so each PR has a distinct
+meaningful head. Merge #1 with its expected combined head, verify main and PR #3,
+then merge #3 with its expected final head after checking applicable rules/CI and
+deployment integration. A required branch update must be a normal merge followed
+by the applicable verification. This work does not substitute closing #1 for a
+merge or alter production configuration.
 
 An offline `git merge-tree --write-tree --messages` comparison of the two branch
 tips returned conflicts in `.dockerignore`, `.gcloudignore`, `README.md` and
 `deploy/README.md`, without modifying the working tree. GitHub's per-PR mergeability
 against main does not mean the two PRs can be combined without conflicts or semantic
-regressions. No real merge was performed.
+regressions. The conflicts are now resolved through the normal local merge
+described above; GitHub merges remain a separate recorded operation.
 
 ## Historical information that remains visible on publication
 

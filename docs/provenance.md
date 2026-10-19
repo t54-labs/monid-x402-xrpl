@@ -2,7 +2,7 @@
 
 T54 has authorized open-sourcing this gateway. This document records source
 references and the limits of the comparison evidence. The concrete release
-license proposal is in [the license plan](license-plan.md); third-party licenses
+license is [MIT](../LICENSE); see [licensing details](licensing.md). Third-party licenses
 remain applicable to their respective components.
 
 ## T54 reference projects
