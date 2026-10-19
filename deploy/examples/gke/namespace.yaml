@@ -1,0 +1,5 @@
+# Example only; not approved for deployment. See ../../README.md.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monid-gateway

@@ -1,3 +1,4 @@
+# Example only; not approved for deployment. See ../../README.md.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -15,12 +16,14 @@ data:
   MONID_BALANCE_CHECK_SECONDS: '60'
   MONID_REQUEST_TIMEOUT_SECONDS: '120'
   X402_PAYMENT_ENABLED: 'true'
+  X402_ALLOW_UNSUBMITTED_RETRY: 'false'
   X402_XRPL_NETWORK: xrpl:1
   X402_XRPL_ISSUER: rQhWct2fv4Vc4KRjRgMrxa8xPN9Zx9iLKV
   X402_XRPL_ASSET: '524C555344000000000000000000000000000000'
   X402_XRPL_FACILITATOR_URL: https://xrpl-facilitator-testnet.t54.ai
-  # Handoff testnet receiver only; no private key belongs in this workload.
-  X402_XRPL_PAYTO_ADDRESS: rfqc8fQ3dU8dzkooa39DZwLdZjdXbqEVDD
+  # Set an operator-owned testnet receiving address with an RLUSD trust line.
+  # Public addresses are not secret keys, but this example must not reuse an operator wallet.
+  X402_XRPL_PAYTO_ADDRESS: REPLACE_WITH_TESTNET_RECEIVING_ADDRESS
   X402_SOURCE_TAG: '804681468'
   X402_MAX_TIMEOUT_SECONDS: '600'
   # Provisional existing brand/pricing; owner approval required before mainnet.

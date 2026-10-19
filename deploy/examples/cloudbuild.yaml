@@ -1,3 +1,4 @@
+# Example only: supply a reviewed _IMAGE in an operator-owned project.
 # Build/publish only; no deployment or runtime secrets. Supply _IMAGE explicitly.
 steps:
   - name: gcr.io/cloud-builders/docker@sha256:d1797996867921778f1adbb7e493baaaf2f6b21e107599c0aab48c2ec06ff311

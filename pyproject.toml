@@ -17,6 +17,15 @@ dependencies = [
   "x402-xrpl==0.3.4",
 ]
 
+[project.urls]
+Repository = "https://github.com/t54-labs/monid-x402-xrpl"
+Issues = "https://github.com/t54-labs/monid-x402-xrpl/issues"
+
+# Release license text and package metadata plan: docs/license-plan.md.
+
+[tool.setuptools.data-files]
+"share/doc/monid-x402-xrpl" = ["THIRD_PARTY_NOTICES.md"]
+
 [dependency-groups]
 dev = [
   "pytest>=8,<9",

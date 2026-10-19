@@ -1,3 +1,4 @@
+# Example only; not approved for deployment. See ../../README.md.
 # Explicit LB health/timeout settings: the default 30s timeout is too short
 # for RUN_WAIT_SECONDS=240 plus upstream requests and facilitator settlement.
 apiVersion: cloud.google.com/v1

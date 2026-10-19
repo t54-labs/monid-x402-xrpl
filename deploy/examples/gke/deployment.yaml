@@ -1,10 +1,11 @@
+# Example only; not approved for deployment. See ../../README.md.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: monid-gateway
   namespace: monid-gateway
 spec:
-  # Both invoices and replay/execution guards are process-local. NO HPA.
+  # One deployment with persistent SQLite execution history. NO HPA or independent DB copies.
   replicas: 1
   strategy:
     type: Recreate
@@ -31,7 +32,7 @@ spec:
       containers:
         - name: gateway
           # Must be replaced with a reviewed Artifact Registry immutable digest.
-          image: us-west1-docker.pkg.dev/tworld-473700/x402-xrpl/monid-gateway:REPLACE_WITH_REVIEWED_IMAGE
+          image: REGION-docker.pkg.dev/PROJECT_ID/REPOSITORY/monid-gateway@sha256:REPLACE_WITH_REVIEWED_DIGEST
           imagePullPolicy: Always
           workingDir: /app
           command: [/app/.venv/bin/uvicorn]

@@ -1,0 +1,10 @@
+title = "Gateway release scan: upstream defaults plus XRPL seed candidates"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "xrpl-family-seed"
+description = "XRPL family/Ed25519 seed candidate (not a public r-address)"
+regex = '''\b(sEd[1-9A-HJ-NP-Za-km-z]{20,40}|s[1-9A-HJ-NP-Za-km-z]{25,34})\b'''
+secretGroup = 1
