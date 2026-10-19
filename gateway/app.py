@@ -163,7 +163,7 @@ def create_app(
 
     @app.post("/t/{tool_path:path}")
     async def run_tool(tool_path: str, request: Request) -> JSONResponse:
-        tool = tool_for(request, catalogs)
+        tool = getattr(request.state, "x402_tool", None) or tool_for(request, catalogs)
         if tool is None:
             return JSONResponse(status_code=404, content={"error": {"code": "unknown_tool"}})
         if settings.X402_PAYMENT_ENABLED and not getattr(request.state, "x402_verified", False):
@@ -173,7 +173,7 @@ def create_app(
         except ValueError:
             payload = {}
 
-        run_id = uuid.uuid4().hex
+        run_id = getattr(request.state, "x402_run_id", None) or uuid.uuid4().hex
         quote = getattr(request.state, "x402_quote", None)
         await ledger.create(
             run_id,
@@ -186,14 +186,27 @@ def create_app(
         async with run_slots:
             try:
                 result = await upstream.run(tool.provider, tool.endpoint, payload)
+                # An accepted async job must be recoverable even if polling times
+                # out or this process dies while waiting for it.
+                await ledger.update(
+                    run_id, upstream_run_id=result.run_id, upstream_status=result.status,
+                )
                 if not result.terminal and result.run_id:
-                    result = await upstream.wait(result, settings.RUN_WAIT_SECONDS)
+                    try:
+                        result = await upstream.wait(result, settings.RUN_WAIT_SECONDS)
+                    except httpx.HTTPError:
+                        # Known accepted work: return the original durable job,
+                        # rather than discarding it and starting another run.
+                        logger.warning("upstream poll failed for run %s", run_id)
             except httpx.HTTPError:
-                logger.exception("upstream run failed for %s", tool.external_id)
-                await ledger.update(run_id, state="upstream_error")
+                logger.warning("upstream execution status unknown for run %s", run_id)
+                request.state.x402_execution_unknown = True
+                await ledger.update(run_id, state="execution_unknown")
                 return JSONResponse(
-                    status_code=502,
-                    content={"error": {"code": "upstream_unavailable", "message": "Try again later."}},
+                    status_code=409,
+                    content={"error": {
+                        "code": "execution_status_unknown", "message": "Reconciliation required.",
+                    }},
                 )
 
         await ledger.update(
@@ -203,20 +216,11 @@ def create_app(
             upstream_cost_usd=str(result.cost_usd) if result.cost_usd is not None else None,
         )
 
-        async def record_settlement(settlement: dict[str, Any] | None) -> None:
-            if settlement is None:
-                await ledger.update(run_id, state="settle_failed")
-                return
-            await ledger.update(
-                run_id,
-                state="settled",
-                settlement_tx=settlement.get("transaction"),
-                payer=settlement.get("payer"),
-            )
-
-        request.state.x402_on_settled = record_settlement
-
         if not result.terminal and result.run_id is None:
+            if not 400 <= result.http_status < 500:
+                request.state.x402_execution_unknown = True
+                await ledger.update(run_id, state="execution_unknown")
+                return JSONResponse(status_code=409, content={"error": {"code": "execution_status_unknown"}})
             # Rejected before any run started (bad input, auth, balance): nothing was
             # done upstream, so nothing is charged.
             await ledger.update(run_id, state="rejected_unbilled")
@@ -256,8 +260,15 @@ def create_app(
     async def get_job(job_id: str, request: Request) -> JSONResponse:
         token = request.headers.get("X-Job-Token") or request.query_params.get("token") or ""
         row = await ledger.get(job_id)
+        invoice = (
+            await app.state.x402_invoices.record(row["invoice_id"])
+            if row and row.get("invoice_id") else None
+        )
         if (
             row is None
+            or (row.get("invoice_id") and (
+                invoice["state"] != "settled" if invoice is not None else row["state"] != "settled"
+            ))
             or not row.get("job_token")
             or not hmac.compare_digest(row["job_token"], token)
             or not row.get("upstream_run_id")

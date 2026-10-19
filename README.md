@@ -25,6 +25,11 @@ address, every tool as a service under it.
    `202 {jobId, jobToken, poll}`. `GET /jobs/{jobId}` with `X-Job-Token` is free.
 
 A request whose input changes after quoting gets a fresh quote instead of running.
+Invoices bind the provider, endpoint and canonical JSON input, including when the
+price stays the same. Retrying an executed invoice requires the original verified
+payment envelope and returns its saved result or retries settlement only. Unknown
+execution/settlement returns `409` and requires reconciliation; it never authorizes
+another upstream execution. See [payment recovery](docs/payment-recovery.md).
 
 ## Pricing
 
@@ -121,7 +126,9 @@ The upstream is a local stand-in (`scripts/fake_monid.py`) unless
 ## Open items
 
 - `X402_XRPL_PAYTO_ADDRESS`: not created yet. It needs an RLUSD trust line.
-- The invoice store is in memory, so run a single instance (or move it to Redis).
+- Invoices, results and execution tombstones now live in the same durable SQLite
+  database as the run ledger. Keep one gateway deployment with persistent storage;
+  do not use independent database copies or discard execution history on restart.
 - Showing all tools on XRPL AI Hub needs the Hub's large-catalog changes: pagination,
   async import, and per-merchant limits.
 

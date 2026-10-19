@@ -23,7 +23,7 @@ class RunResult:
     @property
     def run_id(self) -> str | None:
         value = self.body.get("runId")
-        return value if isinstance(value, str) else None
+        return value if isinstance(value, str) and value.strip() else None
 
     @property
     def status(self) -> str:
@@ -96,7 +96,16 @@ class UpstreamClient:
         deadline = time.monotonic() + deadline_seconds
         while not result.terminal and result.run_id and time.monotonic() < deadline:
             await asyncio.sleep(self._settings.RUN_POLL_INTERVAL_SECONDS)
-            result = await self.get_run(result.run_id)
+            polled = await self.get_run(result.run_id)
+            if (
+                not 200 <= polled.http_status < 300
+                or (not polled.terminal and not polled.run_id)
+                or (polled.run_id and polled.run_id != result.run_id)
+            ):
+                # An unsuccessful/malformed poll is not a rejection of the
+                # original accepted submission. Preserve its recoverable job ID.
+                return result
+            result = RunResult(polled.http_status, {**polled.body, "runId": result.run_id})
         return result
 
     async def balance_ok(self) -> bool:
