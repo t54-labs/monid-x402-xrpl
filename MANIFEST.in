@@ -1,4 +1,12 @@
 include uv.lock
+include Dockerfile .dockerignore .gcloudignore .gitleaks.toml
+include THIRD_PARTY_NOTICES.md
 recursive-include docs *.md
+recursive-include docs/release *.json
 recursive-include scripts *.py
 recursive-include tests *.py
+recursive-include deploy *.md *.yaml
+global-exclude .env .env.* *.log *.sqlite *.sqlite3 *.sqlite3-* *.db *.bak *.pem *.key
+prune data
+prune .git
+prune .venv

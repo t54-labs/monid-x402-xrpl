@@ -1,5 +1,10 @@
 # monid-x402-xrpl
 
+Release preparation is in progress. T54 has not yet approved an open-source
+license for this gateway. See the [release decisions and checklist](docs/open-source-release.md),
+[source provenance](docs/provenance.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
+Third-party license notices do not grant a license to the gateway itself.
+
 An x402 gateway that sells the upstream tool catalog (Monid: about 2,600 agent tools
 from about 90 providers) for **RLUSD on the XRP Ledger**. Agents pay us per call in
 RLUSD; we run the tool with our own prepaid upstream key and return the result.
@@ -100,7 +105,10 @@ It prints the RLUSD quote, the tool output, and the testnet settlement transacti
 3. With the gateway running:
    `HUB_DATABASE_URL=postgresql://postgres:password@127.0.0.1:5440/x402_xrpl uv run python -m scripts.seed_local_hub`
 4. Start the Hub API on :4011 and the website on :3000 (`hub-api` / `hub-web` in
-   `.claude/launch.json`).
+   `.claude/launch.json`). Set `XRPL_AI_HUB_DIR` to your own absolute Hub checkout
+   path in the launcher's environment first. The gateway launcher assumes this
+   repository is the current working directory. The local Postgres password above
+   is only for the disposable localhost database; use your own production secret.
 5. Open http://localhost:3000/directory.
 
 ## End-to-end test (XRPL testnet)
@@ -131,3 +139,11 @@ The upstream is a local stand-in (`scripts/fake_monid.py`) unless
   do not use independent database copies or discard execution history on restart.
 - Showing all tools on XRPL AI Hub needs the Hub's large-catalog changes: pagination,
   async import, and per-merchant limits.
+
+## Deployment examples
+
+The [sanitized GKE and Cloud Build examples](deploy/README.md) use operator-supplied
+project, image, receiving-address and domain placeholders. They are not an approved
+deployment plan. Review payment recovery, persistent storage and the separate
+release gates before operating a paid service. Never commit `.env`, wallet seeds,
+catalog/result snapshots, logs or databases; the build upload allowlists exclude them.

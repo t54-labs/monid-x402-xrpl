@@ -1,0 +1,10 @@
+# Example only; not approved for deployment. See ../../README.md.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - storage.yaml
+  - deployment.yaml
+  - networking.yaml
+# Deliberately excludes secret.example.yaml. Provision the real Secret out of band.

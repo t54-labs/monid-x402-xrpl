@@ -1,0 +1,26 @@
+# Allowlist: never send local keys, wallets, ledgers, .git or .venv to Docker.
+**
+!Dockerfile
+!pyproject.toml
+!uv.lock
+!README.md
+!THIRD_PARTY_NOTICES.md
+!gateway/
+gateway/**
+!gateway/*.py
+!gateway/**/*.py
+!scripts/
+scripts/**
+!scripts/*.py
+!scripts/**/*.py
+# Final denies also cover sensitive files under re-included source directories.
+**/.env*
+**/data/**
+**/*.pem
+**/*.key
+**/*.log
+**/*.sqlite*
+**/*.db
+**/*.bak
+**/__pycache__/
+**/*.pyc

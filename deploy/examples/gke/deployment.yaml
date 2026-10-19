@@ -1,0 +1,124 @@
+# Example only; not approved for deployment. See ../../README.md.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: monid-gateway
+  namespace: monid-gateway
+spec:
+  # One deployment with persistent SQLite execution history. NO HPA or independent DB copies.
+  replicas: 1
+  strategy:
+    type: Recreate
+  revisionHistoryLimit: 3
+  progressDeadlineSeconds: 900
+  selector:
+    matchLabels:
+      app: monid-gateway
+  template:
+    metadata:
+      labels:
+        app: monid-gateway
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 660
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: gateway
+          # Must be replaced with a reviewed Artifact Registry immutable digest.
+          image: REGION-docker.pkg.dev/PROJECT_ID/REPOSITORY/monid-gateway@sha256:REPLACE_WITH_REVIEWED_DIGEST
+          imagePullPolicy: Always
+          workingDir: /app
+          command: [/app/.venv/bin/uvicorn]
+          args:
+            - gateway.main:app
+            - --host
+            - 0.0.0.0
+            - --port
+            - '8000'
+            - --workers
+            - '1'
+            - --timeout-graceful-shutdown
+            - '600'
+            - --no-access-log
+          envFrom:
+            - configMapRef:
+                name: monid-gateway-config
+          env:
+            - name: MONID_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: monid-gateway-secrets
+                  key: MONID_API_KEY
+            - name: PYTHONDONTWRITEBYTECODE
+              value: '1'
+            - name: PYTHONUNBUFFERED
+              value: '1'
+          ports:
+            - name: http
+              containerPort: 8000
+          # /health is HTTP 200 even when payment configuration is missing.
+          # Liveness must NOT restart a process for low balance or upstream outages.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 2
+            failureThreshold: 4
+          readinessProbe:
+            exec:
+              command:
+                - /app/.venv/bin/python
+                - -c
+                - |
+                  import json, sys, urllib.request
+                  with urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2) as response:
+                      health = json.load(response)
+                  sys.exit(0 if health.get('paymentsReady') is True and health.get('tools', 0) > 0 else 1)
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command: [/app/.venv/bin/python, -c, 'import time; time.sleep(30)']
+          resources:
+            requests:
+              cpu: '500m'
+              memory: 512Mi
+              ephemeral-storage: 1Gi
+            limits:
+              cpu: '1'
+              memory: 1Gi
+              ephemeral-storage: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: monid-gateway-data
+        - name: tmp
+          emptyDir:
+            sizeLimit: 128Mi

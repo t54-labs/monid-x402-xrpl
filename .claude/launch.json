@@ -6,7 +6,7 @@
       "runtimeExecutable": "uv",
       "runtimeArgs": [
         "--directory",
-        "/Users/wowill/Documents/webProject/t54/monid-x402-xrpl",
+        ".",
         "run",
         "uvicorn",
         "gateway.main:app",
@@ -22,7 +22,7 @@
       "runtimeExecutable": "bash",
       "runtimeArgs": [
         "-lc",
-        "cd /Users/wowill/Documents/webProject/t54/xrpl-ai-hub-provider-groups/apps/api && DATABASE_URL=postgresql://postgres:password@127.0.0.1:5440/x402_xrpl PORT=4011 AGENT_LEAGUE_ENABLED=false npx ts-node-dev --transpile-only src/index.ts"
+        "cd \"${XRPL_AI_HUB_DIR:?Set XRPL_AI_HUB_DIR to your local XRPL AI Hub checkout}/apps/api\" && DATABASE_URL=postgresql://postgres:password@127.0.0.1:5440/x402_xrpl PORT=4011 AGENT_LEAGUE_ENABLED=false npx ts-node-dev --transpile-only src/index.ts"
       ],
       "port": 4011
     },
@@ -31,7 +31,7 @@
       "runtimeExecutable": "bash",
       "runtimeArgs": [
         "-lc",
-        "cd /Users/wowill/Documents/webProject/t54/xrpl-ai-hub-provider-groups && API_URL=http://127.0.0.1:4011 NEXT_PUBLIC_XRPL_NETWORK=mainnet pnpm --filter web dev"
+        "cd \"${XRPL_AI_HUB_DIR:?Set XRPL_AI_HUB_DIR to your local XRPL AI Hub checkout}\" && API_URL=http://127.0.0.1:4011 NEXT_PUBLIC_XRPL_NETWORK=mainnet pnpm --filter web dev"
       ],
       "port": 3000
     }

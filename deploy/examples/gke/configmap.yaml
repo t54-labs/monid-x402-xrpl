@@ -1,0 +1,43 @@
+# Example only; not approved for deployment. See ../../README.md.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: monid-gateway-config
+  namespace: monid-gateway
+data:
+  LOG_LEVEL: INFO
+  # Reserved placeholder, not an assigned domain. Replace in all three locations
+  # here and in networking.yaml (Ingress host and ManagedCertificate).
+  PUBLIC_BASE_URL: https://monid-testnet.example.invalid
+  DATABASE_PATH: /app/data/gateway.sqlite3
+  CATALOG_SNAPSHOT_PATH: /app/data/catalog.json
+  MONID_API_BASE_URL: https://api.monid.ai
+  MONID_MIN_BALANCE_USD: '5'
+  MONID_BALANCE_CHECK_SECONDS: '60'
+  MONID_REQUEST_TIMEOUT_SECONDS: '120'
+  X402_PAYMENT_ENABLED: 'true'
+  X402_ALLOW_UNSUBMITTED_RETRY: 'false'
+  X402_XRPL_NETWORK: xrpl:1
+  X402_XRPL_ISSUER: rQhWct2fv4Vc4KRjRgMrxa8xPN9Zx9iLKV
+  X402_XRPL_ASSET: '524C555344000000000000000000000000000000'
+  X402_XRPL_FACILITATOR_URL: https://xrpl-facilitator-testnet.t54.ai
+  # Set an operator-owned testnet receiving address with an RLUSD trust line.
+  # Public addresses are not secret keys, but this example must not reuse an operator wallet.
+  X402_XRPL_PAYTO_ADDRESS: REPLACE_WITH_TESTNET_RECEIVING_ADDRESS
+  X402_SOURCE_TAG: '804681468'
+  X402_MAX_TIMEOUT_SECONDS: '600'
+  # Provisional existing brand/pricing; owner approval required before mainnet.
+  GATEWAY_BRAND_NAME: Monid Tool Router
+  HIDE_UPSTREAM_BRAND: 'false'
+  PRICE_MARKUP: '0'
+  PRICE_QUANTUM_RLUSD: '0.0001'
+  MIN_PRICE_RLUSD: '0.001'
+  DEFAULT_RESULT_UNITS: '10'
+  DEFAULT_METERED_UNITS: '10'
+  CATALOG_REFRESH_SECONDS: '3600'
+  CATALOG_PAGE_SIZE: '200'
+  EXCLUDED_PROVIDERS: agentmail,agentline,saperly,smolmachine,sfs,recall,x402.browserbase.com
+  EXCLUDED_ENDPOINTS: blockrun.ai#/api/v1/phone/*,blockrun.ai#/api/v1/voice/*,tinyfish#/browser-sessions/*,tinyfish#/browser-profiles/*
+  RUN_WAIT_SECONDS: '240'
+  RUN_POLL_INTERVAL_SECONDS: '3'
+  MAX_CONCURRENT_RUNS: '32'

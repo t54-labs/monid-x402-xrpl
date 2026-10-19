@@ -1,0 +1,13 @@
+# Example only; not approved for deployment. See ../../README.md.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: monid-gateway-data
+  namespace: monid-gateway
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard-rwo
+  resources:
+    requests:
+      storage: 5Gi
