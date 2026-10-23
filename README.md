@@ -138,7 +138,7 @@ The upstream is a local stand-in (`scripts/fake_monid.py`) unless
 ## AWS deployment
 
 The [AWS automation runbook](deploy/aws/README.md) describes the GitHub Actions
-main-branch build, ECR images, EC2 deployment, and Parameter Store environment
+automatic main-branch build checks, manually triggered ECR/EC2 deployment, and Parameter Store environment
 management. The scripts require standby mode; review the
 [cutover guide](deploy/aws-migration.md) before enabling paid traffic. These
 documents describe reusable procedures, not a live environment.

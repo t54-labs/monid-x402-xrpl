@@ -10,10 +10,12 @@ credentials are not needed in GitHub. Keep the source service active until the
 [`.github/workflows/aws.yml`](../../.github/workflows/aws.yml) runs on pushes to
 `main`, pull requests targeting `main`, and manual dispatch:
 
-- Pull requests run the application/configuration tests and build the Docker image
-  without AWS credentials or deployment permissions.
-- A main push runs tests, authenticates to AWS with OIDC, builds an amd64 image,
-  pushes an immutable commit/run tag to ECR, and deploys its digest through SSM.
+- Pull requests and main pushes run the application/configuration tests and build
+  the Docker image without AWS credentials or deployment permissions. These
+  validation images are not published; merging code does not update EC2.
+- Only a manual dispatch on main can deploy. After tests pass, the `deploy`
+  operation authenticates to AWS with OIDC, builds an amd64 image, pushes an
+  immutable commit/run tag to ECR, and deploys its digest through SSM.
 - Deployment jobs are serialized and never cancel an in-progress rollout. A run
   whose commit has been superseded on main skips the remote rollout.
 - The host pulls before restarting, keeps one application worker, preserves the
@@ -28,6 +30,15 @@ credentials are not needed in GitHub. Keep the source service active until the
 Before enabling deployment, protect main with at least one approving review,
 dismiss stale approvals after new commits, and apply the protection to
 administrators. Do not bypass these controls to install the workflow.
+
+To release after merging the workflow, open **Actions → Build and manually deploy
+AWS → Run workflow**, select **main**, and choose **deploy**. The selected main
+revision is tested and built again for release. A dispatch on another branch
+cannot run the deployment job. The CLI equivalent is:
+
+```bash
+gh workflow run aws.yml --ref main -f operation=deploy
+```
 
 ## Where to manage settings
 
@@ -59,7 +70,7 @@ before configuring the trust policy.
 2. Use `SecureString` for `MONID_API_KEY`; never change it to `String`. The initial
    `__NOT_CONFIGURED__` placeholders render as empty values, keeping payment
    readiness closed. Add real production credentials only as part of the cutover.
-3. After the workflow is merged, open **Actions → Build and deploy AWS → Run
+3. After the workflow is merged, open **Actions → Build and manually deploy AWS → Run
    workflow**, select **main**, and choose **refresh-config**. This reloads the
    runtime configuration and restarts the existing image without a Docker build.
    Equivalently:
@@ -72,7 +83,7 @@ before configuring the trust policy.
    must continue returning 503, even if credentials eventually make the
    application's `paymentsReady` field true.
 
-Normal main deployments also reload parameters. An ordinary container restart
+Manual image deployments also reload parameters. An ordinary container restart
 uses the current rendered environment; a host boot fetches fresh parameters.
 Editing Parameter Store alone does not change a running process.
 

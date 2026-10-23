@@ -1,4 +1,4 @@
-name: Build and deploy AWS
+name: Build and manually deploy AWS
 
 on:
   push:
@@ -10,6 +10,7 @@ on:
       operation:
         description: Deploy a new image or reload runtime parameters
         type: choice
+        required: true
         options: [deploy, refresh-config]
         default: deploy
 
@@ -34,13 +35,13 @@ jobs:
           bash -n deploy/aws/bootstrap.sh
           bash -n deploy/aws/runtime/install.sh
           bash -n deploy/aws/runtime/deploy.sh
-      - name: Validate Docker build on pull requests
-        if: github.event_name == 'pull_request'
+      - name: Validate Docker build on pushes and pull requests
+        if: github.event_name != 'workflow_dispatch'
         run: docker build --platform linux/amd64 --tag monid-gateway:validation .
 
   deploy:
     needs: validate
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment:
@@ -58,7 +59,7 @@ jobs:
       ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
       EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
       PARAMETER_PREFIX: ${{ vars.PARAMETER_PREFIX }}
-      DEPLOY_OPERATION: ${{ inputs.operation || 'deploy' }}
+      DEPLOY_OPERATION: ${{ inputs.operation }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
