@@ -17,3 +17,6 @@ dist/
 *.bak
 *.pem
 *.key
+
+# Private operator notes must never enter source control.
+*.local.md

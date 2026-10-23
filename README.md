@@ -135,7 +135,15 @@ The upstream is a local stand-in (`scripts/fake_monid.py`) unless
 - Showing all tools on XRPL AI Hub needs the Hub's large-catalog changes: pagination,
   async import, and per-merchant limits.
 
-## Deployment examples
+## AWS deployment
+
+The [AWS automation runbook](deploy/aws/README.md) describes the GitHub Actions
+main-branch build, ECR images, EC2 deployment, and Parameter Store environment
+management. The scripts require standby mode; review the
+[cutover guide](deploy/aws-migration.md) before enabling paid traffic. These
+documents describe reusable procedures, not a live environment.
+
+## Other deployment examples
 
 The [sanitized GKE and Cloud Build examples](deploy/README.md) use operator-supplied
 project, image, receiving-address and domain placeholders. They are not an approved

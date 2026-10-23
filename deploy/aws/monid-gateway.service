@@ -1,0 +1,16 @@
+[Unit]
+Description=Monid XRPL gateway (single writer)
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Restart=always
+RestartSec=5
+TimeoutStopSec=660
+ExecStartPre=-/usr/bin/docker rm -f monid-gateway
+ExecStart=/usr/bin/docker run --name monid-gateway --init --user 10001:10001 --read-only --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp:rw,noexec,nosuid,size=64m --memory 1400m --pids-limit 256 --log-opt max-size=10m --log-opt max-file=3 --env-file /etc/monid/gateway.env --mount type=bind,src=/srv/monid/data,dst=/app/data -p 127.0.0.1:8000:8000 monid-gateway:release /app/.venv/bin/uvicorn gateway.main:app --host 0.0.0.0 --port 8000 --workers 1 --no-access-log --timeout-graceful-shutdown 600
+ExecStop=/usr/bin/docker stop --time 650 monid-gateway
+
+[Install]
+WantedBy=multi-user.target

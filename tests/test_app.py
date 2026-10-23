@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
@@ -247,7 +248,12 @@ async def test_long_async_run_returns_a_pollable_job(tmp_path, upstream, facilit
     assert done.json()["output"] == {"results": [1, 2]}
 
 
-async def test_low_upstream_balance_stops_sales_before_payment(tmp_path, upstream, facilitator):
+@pytest.mark.parametrize("monotonic_time", [0.0, 1000.0])
+async def test_low_upstream_balance_stops_sales_before_payment(
+    tmp_path, upstream, facilitator, monkeypatch, monotonic_time
+):
+    # A newly booted runner must check the balance on its first request too.
+    monkeypatch.setattr("gateway.upstream.time", SimpleNamespace(monotonic=lambda: monotonic_time))
     upstream.balance = 1.0
     _, client = build(tmp_path, upstream, facilitator)
     response = await client.post("/t/exa/search", json={"query": "x"})

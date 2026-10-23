@@ -1,0 +1,15 @@
+[Unit]
+Description=Load Monid runtime configuration from Parameter Store
+After=network-online.target
+Wants=network-online.target
+Before=monid-gateway.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+EnvironmentFile=/etc/monid/runtime.conf
+ExecStart=/usr/bin/python3 /opt/monid/bin/load_environment.py
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

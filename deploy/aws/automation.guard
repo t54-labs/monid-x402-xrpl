@@ -1,0 +1,17 @@
+let repositories = Resources.*[ Type == 'AWS::ECR::Repository' ]
+let roles = Resources.*[ Type == 'AWS::IAM::Role' ]
+rule immutable_retained_images {
+    %repositories {
+        DeletionPolicy == 'Retain'
+        UpdateReplacePolicy == 'Retain'
+        Properties.ImageTagMutability == 'IMMUTABLE'
+        Properties.EncryptionConfiguration.EncryptionType == 'AES256'
+    }
+}
+rule oidc_audience_and_subject {
+    %roles.Properties.AssumeRolePolicyDocument.Statement[*] {
+        Action == 'sts:AssumeRoleWithWebIdentity'
+        Condition.StringEquals.'token.actions.githubusercontent.com:aud' == 'sts.amazonaws.com'
+        Condition.StringEquals.'token.actions.githubusercontent.com:sub'.Ref == 'GitHubSubject'
+    }
+}
