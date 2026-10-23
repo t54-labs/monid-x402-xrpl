@@ -135,13 +135,14 @@ that a later rebuild from floating base tags is identical.
 
 Do not remove the standby marker merely because HTTP health is green.
 
-1. **Request deadlines:** The template's CloudFront origin read timeout is 120
-   seconds and nginx is 115 seconds. `RUN_WAIT_SECONDS=0` avoids deliberate
-   long polling, but does **not** bound queueing, initial upstream execution,
-   verification, or settlement. Review the configured upstream timeout too.
-   Implement and test a coherent end-to-end deadline/admission strategy before
-   enabling paid traffic. Preserve durable unknown states and never blindly
-   retry an upstream execution or settlement after a transport timeout.
+1. **Request deadlines:** The application bounds tool/job requests with
+   `REQUEST_DEADLINE_SECONDS` (100 seconds by default), below the template's
+   nginx/CloudFront timeouts of 115/120 seconds. Signed requests exceeding
+   concurrency capacity are rejected before invoice claiming. Keep
+   `RUN_WAIT_SECONDS=0` for prompt asynchronous job handoff. Validate these
+   cancellation and admission behaviors with the selected release before enabling
+   paid traffic. A deadline does not undo an upstream side effect; preserve unknown
+   states and retry only the original signed invoice, never a new execution.
 2. **Source compatibility:** identify the source service schema and deployment
    revision; compare it with the AWS application and durable invoice schema.
    Take a backup before any schema initialization/migration against real data.
@@ -159,7 +160,9 @@ Do not remove the standby marker merely because HTTP health is green.
 5. **Recovery:** take an encrypted backup outside the EC2 disk, restore it into an
    isolated directory, and prove integrity and recovery. Configure backup
    retention, disk monitoring, and actionable health alerts before production.
-   The release artifact bucket is not a configured database backup solution.
+   The separate [operations stack](aws/operations/README.md) provides a private
+   backup bucket, daily SQLite snapshots and basic alarms. Verify its installation,
+   off-host restore and notification setup independently of release artifacts.
 6. **Routing:** a provider-generated hostname generally cannot be reassigned to
    CloudFront. Decide the production hostname and update clients/Hub registration
    deliberately. Preserve old job polling behavior during the transition. Never

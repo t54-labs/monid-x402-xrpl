@@ -95,6 +95,8 @@ paths. It writes atomically and does not print values on failure. The legacy
 
 ## Infrastructure and initial setup
 
+- See [operations preparation](operations/README.md) for private backups,
+  restore/schema rehearsals, monitoring, and production cutover checks.
 - `artifacts.json` and `service.json` define the EC2/CloudFront base.
 - `automation.json` adds the ECR repository, GitHub OIDC deployment role, and the
   existing instance role's runtime permissions. It does not create an OIDC

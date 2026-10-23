@@ -1,0 +1,9 @@
+[Unit]
+Description=Private consistent gateway ledger backup
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+UMask=0077
+ExecStart=/opt/monid/bin/backup.sh
+TimeoutStartSec=600

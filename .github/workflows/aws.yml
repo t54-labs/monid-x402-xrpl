@@ -35,6 +35,8 @@ jobs:
           bash -n deploy/aws/bootstrap.sh
           bash -n deploy/aws/runtime/install.sh
           bash -n deploy/aws/runtime/deploy.sh
+          bash -n deploy/aws/operations/install.sh
+          bash -n deploy/aws/operations/backup.sh
       - name: Validate Docker build on pushes and pull requests
         if: github.event_name != 'workflow_dispatch'
         run: docker build --platform linux/amd64 --tag monid-gateway:validation .
