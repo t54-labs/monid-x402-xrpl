@@ -55,9 +55,18 @@ Configure the `aws` GitHub environment to allow **only main**. Its variables are
 `EC2_INSTANCE_ID`, `PARAMETER_PREFIX`, and `SERVICE_URL`. These are deployment
 identifiers, not application secrets. No long-lived AWS key is stored in GitHub.
 
-The instance role can read only this parameter path and pull only this ECR
-repository. The GitHub role can push images and run SSM commands on the designated
-instance; the workflow never retrieves application parameter values. Repository
+The base service role explicitly denies parameter value/history reads outside
+`ParameterPrefix/*` and path reads anywhere except the exact `ParameterPrefix`.
+This deny overrides the wildcard `GetParameter`/`GetParameters` allows in
+`AmazonSSMManagedInstanceCore`, while retaining the agent's command and messaging
+permissions. Ancestor paths (including `/`) are denied because a recursive read
+of an ancestor can expose every descendant. The renderer's key allowlist is an
+application check, not an IAM boundary. Parameter history reads within the prefix
+are not granted by these templates.
+
+The instance role pulls only this ECR repository. The GitHub role can push images
+and run SSM commands on the designated instance; the workflow never retrieves
+application parameter values. Repository
 maintainers who can approve deployment code are consequently trusted operators.
 Bind the OIDC subject to the intended repository and `aws` environment. Obtain
 the repository's actual subject format, including immutable IDs when enabled,
@@ -112,6 +121,30 @@ the GitHub environment branch policy **before** allowing OIDC deployment. Initia
 required runtime parameters without overwriting existing values. `DATABASE_PATH`
 must be `/app/data/gateway.sqlite3`, `CATALOG_SNAPSHOT_PATH` must be
 `/app/data/catalog.json`, and `X402_PAYMENT_ENABLED` must be `true`.
+
+For an existing installation, apply the base `service.json` role restriction
+before enabling runtime access. Use the same `ParameterPrefix` in both stacks,
+the GitHub environment, and the host configuration. Inspect the change set to
+ensure the permission update does not replace the instance or alter the origin.
+Changing the prefix requires a coordinated configuration update; mismatches fail
+closed. The restriction also blocks SSM documents that depend on parameters
+outside this path; review such documents before enabling them.
+
+Run the effective-role check with an administrative identity in the destination
+account after applying the templates:
+
+```bash
+python scripts/check_parameter_access.py \
+  --role-arn "$INSTANCE_ROLE_ARN" --region "$AWS_REGION" \
+  --prefix "$PARAMETER_PREFIX"
+```
+
+This uses IAM `SimulatePrincipalPolicy` against all attached and inline policies,
+including the SSM managed policy. It requires expected allows inside the runtime
+path and explicit denies for other services, ancestors, lookalike prefixes,
+regions, and accounts. It never retrieves parameter values. Run an SSM command
+and the host environment loader afterward to verify agent/runtime compatibility;
+policy simulation alone does not validate credentials or service behavior.
 
 The initial managed-runtime installation can use the same SSM transport with
 `--operation refresh-config`; it keeps the locally built image until the first

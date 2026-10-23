@@ -33,6 +33,12 @@
       "Default": "",
       "AllowedPattern": "(^$|sg-[a-f0-9]+)"
     },
+    "ParameterPrefix": {
+      "Type": "String",
+      "Default": "/monid-x402-xrpl/runtime",
+      "AllowedPattern": "(/[a-zA-Z0-9_.-]+)+",
+      "Description": "Runtime parameter path; must match automation.json and the host configuration."
+    },
     "ServiceName": {
       "Type": "String",
       "Default": "monid-x402-xrpl",
@@ -249,6 +255,34 @@
           }
         ],
         "Policies": [
+          {
+            "PolicyName": "RestrictRuntimeParameters",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "DenyParameterValuesOutsideRuntime",
+                  "Effect": "Deny",
+                  "Action": [
+                    "ssm:GetParameter",
+                    "ssm:GetParameters",
+                    "ssm:GetParameterHistory"
+                  ],
+                  "NotResource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ParameterPrefix}/*"
+                  }
+                },
+                {
+                  "Sid": "DenyParameterPathsOutsideRuntime",
+                  "Effect": "Deny",
+                  "Action": "ssm:GetParametersByPath",
+                  "NotResource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ParameterPrefix}"
+                  }
+                }
+              ]
+            }
+          },
           {
             "PolicyName": "ReadRelease",
             "PolicyDocument": {

@@ -47,3 +47,17 @@ rule https_without_payment_caching when %distributions !empty {
         CustomErrorResponses[*].ErrorCachingMinTTL == 0
     }
 }
+
+rule constrain_managed_parameter_reads when %instances !empty {
+    let restrictions = Resources.InstanceRole.Properties.Policies[ PolicyName == 'RestrictRuntimeParameters' ]
+    %restrictions !empty
+    %restrictions.PolicyDocument.Statement[*].Effect == 'Deny'
+    let values = %restrictions.PolicyDocument.Statement[ Sid == 'DenyParameterValuesOutsideRuntime' ]
+    %values !empty
+    %values.Action == ['ssm:GetParameter', 'ssm:GetParameters', 'ssm:GetParameterHistory']
+    %values.NotResource.'Fn::Sub' == 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ParameterPrefix}/*'
+    let paths = %restrictions.PolicyDocument.Statement[ Sid == 'DenyParameterPathsOutsideRuntime' ]
+    %paths !empty
+    %paths.Action == 'ssm:GetParametersByPath'
+    %paths.NotResource.'Fn::Sub' == 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ParameterPrefix}'
+}

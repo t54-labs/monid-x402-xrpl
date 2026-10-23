@@ -23,7 +23,8 @@
     "ParameterPrefix": {
       "Type": "String",
       "Default": "/monid-x402-xrpl/runtime",
-      "AllowedPattern": "/[a-zA-Z0-9/_-]+"
+      "AllowedPattern": "(/[a-zA-Z0-9_.-]+)+",
+      "Description": "Must match the base service stack ParameterPrefix and the host configuration."
     }
   },
   "Resources": {
