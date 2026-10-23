@@ -1,0 +1,63 @@
+# Gateway infrastructure checks; this is not a comprehensive compliance certification.
+let buckets = Resources.*[ Type == 'AWS::S3::Bucket' ]
+let instances = Resources.*[ Type == 'AWS::EC2::Instance' ]
+let distributions = Resources.*[ Type == 'AWS::CloudFront::Distribution' ]
+
+rule private_encrypted_artifacts when %buckets !empty {
+    %buckets {
+        DeletionPolicy == 'Retain'
+        UpdateReplacePolicy == 'Retain'
+        Properties {
+            PublicAccessBlockConfiguration {
+                BlockPublicAcls == true
+                BlockPublicPolicy == true
+                IgnorePublicAcls == true
+                RestrictPublicBuckets == true
+            }
+            BucketEncryption.ServerSideEncryptionConfiguration[*].ServerSideEncryptionByDefault.SSEAlgorithm == 'AES256'
+            VersioningConfiguration.Status == 'Enabled'
+        }
+    }
+}
+
+rule encrypted_retained_single_writer when %instances !empty {
+    %instances {
+        DeletionPolicy == 'Retain'
+        UpdateReplacePolicy == 'Retain'
+        Properties {
+            InstanceType == 't3.small'
+            DisableApiTermination == true
+            MetadataOptions.HttpTokens == 'required'
+            MetadataOptions.HttpPutResponseHopLimit == 1
+            BlockDeviceMappings[*].Ebs {
+                Encrypted == true
+                DeleteOnTermination == false
+                VolumeType == 'gp3'
+                VolumeSize == 20
+            }
+        }
+    }
+}
+
+rule https_without_payment_caching when %distributions !empty {
+    %distributions.Properties.DistributionConfig {
+        DefaultCacheBehavior.ViewerProtocolPolicy == 'https-only'
+        DefaultCacheBehavior.CachePolicyId == '4135ea2d-6df8-44a3-9df3-4b5a84be39ad'
+        Origins[*].ConnectionAttempts == 1
+        CustomErrorResponses[*].ErrorCachingMinTTL == 0
+    }
+}
+
+rule constrain_managed_parameter_reads when %instances !empty {
+    let restrictions = Resources.InstanceRole.Properties.Policies[ PolicyName == 'RestrictRuntimeParameters' ]
+    %restrictions !empty
+    %restrictions.PolicyDocument.Statement[*].Effect == 'Deny'
+    let values = %restrictions.PolicyDocument.Statement[ Sid == 'DenyParameterValuesOutsideRuntime' ]
+    %values !empty
+    %values.Action == ['ssm:GetParameter', 'ssm:GetParameters', 'ssm:GetParameterHistory']
+    %values.NotResource.'Fn::Sub' == 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ParameterPrefix}/*'
+    let paths = %restrictions.PolicyDocument.Statement[ Sid == 'DenyParameterPathsOutsideRuntime' ]
+    %paths !empty
+    %paths.Action == 'ssm:GetParametersByPath'
+    %paths.NotResource.'Fn::Sub' == 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ParameterPrefix}'
+}

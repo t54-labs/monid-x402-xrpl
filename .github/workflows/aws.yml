@@ -1,0 +1,112 @@
+name: Build and manually deploy AWS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Deploy a new image or reload runtime parameters
+        type: choice
+        required: true
+        options: [deploy, refresh-config]
+        default: deploy
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with:
+          version: '0.9.7'
+          python-version: '3.12'
+      - run: uv run --frozen pytest -q
+      - name: Check deployment scripts
+        run: |
+          bash -n deploy/aws/bootstrap.sh
+          bash -n deploy/aws/runtime/install.sh
+          bash -n deploy/aws/runtime/deploy.sh
+          bash -n deploy/aws/operations/install.sh
+          bash -n deploy/aws/operations/backup.sh
+      - name: Validate Docker build on pushes and pull requests
+        if: github.event_name != 'workflow_dispatch'
+        run: docker build --platform linux/amd64 --tag monid-gateway:validation .
+
+  deploy:
+    needs: validate
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: aws
+      url: ${{ vars.SERVICE_URL }}
+    concurrency:
+      group: monid-aws-deployment
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+      EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+      PARAMETER_PREFIX: ${{ vars.PARAMETER_PREFIX }}
+      DEPLOY_OPERATION: ${{ inputs.operation }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Authenticate to AWS with OIDC
+        uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c # v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          role-session-name: github-${{ github.run_id }}
+      - name: Build and publish immutable image
+        if: env.DEPLOY_OPERATION == 'deploy'
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_tag="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          image="$ECR_REGISTRY/$ECR_REPOSITORY:$image_tag"
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+          docker build --platform linux/amd64 --label "org.opencontainers.image.revision=$GITHUB_SHA" --tag "$image" .
+          docker push "$image"
+          digest=$(aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids "imageTag=$image_tag" --query 'imageDetails[0].imageDigest' --output text)
+          printf 'image=%s/%s@%s\n' "$ECR_REGISTRY" "$ECR_REPOSITORY" "$digest" >> "$GITHUB_OUTPUT"
+      - name: Deploy or reload configuration through Systems Manager
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+        run: |
+          latest=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "$latest" != "$GITHUB_SHA" ]; then
+            echo "A newer main revision exists; skipping this superseded deployment."
+            exit 0
+          fi
+          python3 deploy/aws/deploy_via_ssm.py --operation "$DEPLOY_OPERATION" --image "$IMAGE"
+      - name: Verify CloudFront health
+        env:
+          SERVICE_URL: ${{ vars.SERVICE_URL }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          with urllib.request.urlopen(os.environ['SERVICE_URL'] + '/health', timeout=30) as response:
+              health = json.load(response)
+          assert health['ok'] and health['tools'] > 0
+          print('CloudFront health verified; paid traffic remains controlled by the standby gate.')
+          PY
+      - name: Log out of registry
+        if: always()
+        run: docker logout "$ECR_REGISTRY" >/dev/null 2>&1 || true

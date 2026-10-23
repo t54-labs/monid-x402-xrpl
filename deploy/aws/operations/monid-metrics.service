@@ -1,0 +1,9 @@
+[Unit]
+Description=Publish gateway health, disk and backup metrics
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/monid/operations.conf
+ExecStart=/usr/bin/python3 /opt/monid/bin/metrics.py
+TimeoutStartSec=60

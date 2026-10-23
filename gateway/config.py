@@ -117,6 +117,9 @@ class Settings(BaseSettings):
     RUN_WAIT_SECONDS: float = Field(default=240.0, ge=0)
     RUN_POLL_INTERVAL_SECONDS: float = Field(default=3.0, gt=0)
     MAX_CONCURRENT_RUNS: int = Field(default=32, ge=1)
+    # Covers body reading, balance, verification, execution and settlement.
+    # Keep below the ingress timeout, with room for cancellation/DB cleanup.
+    REQUEST_DEADLINE_SECONDS: float = Field(default=100.0, gt=0, le=100)
 
     @field_validator("PRICE_MARKUP", "PRICE_QUANTUM_RLUSD", "MIN_PRICE_RLUSD", "MONID_MIN_BALANCE_USD")
     @classmethod

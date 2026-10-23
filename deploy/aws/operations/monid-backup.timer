@@ -1,0 +1,8 @@
+[Unit]
+Description=Daily gateway ledger backup
+[Timer]
+OnCalendar=*-*-* 04:00:00 UTC
+RandomizedDelaySec=600
+Persistent=true
+[Install]
+WantedBy=timers.target

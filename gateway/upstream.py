@@ -65,7 +65,8 @@ class UpstreamClient:
     def __init__(self, settings: Settings, client: httpx.AsyncClient) -> None:
         self._settings = settings
         self._client = client
-        self._balance: tuple[float, Decimal | None] = (0.0, None)
+        # No cached balance exists until the first request, regardless of uptime.
+        self._balance: tuple[float, Decimal | None] = (float("-inf"), None)
 
     @property
     def _headers(self) -> dict[str, str]:

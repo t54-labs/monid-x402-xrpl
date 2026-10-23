@@ -1,0 +1,351 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Private ledger backups and basic gateway operational alarms.",
+  "Parameters": {
+    "InstanceId": {
+      "Type": "AWS::EC2::Instance::Id"
+    },
+    "InstanceRoleName": {
+      "Type": "String"
+    },
+    "NotificationTopicArn": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|^arn:[^:]+:sns:[^:]+:[0-9]{12}:.+$"
+    }
+  },
+  "Conditions": {
+    "HasNotifications": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "NotificationTopicArn"
+            },
+            ""
+          ]
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "Backups": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Purpose",
+            "Value": "Private ledger backups"
+          }
+        ],
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "ExpireOldBackups",
+              "Status": "Enabled",
+              "ExpirationInDays": 90,
+              "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 30
+              },
+              "AbortIncompleteMultipartUpload": {
+                "DaysAfterInitiation": 1
+              }
+            }
+          ]
+        }
+      }
+    },
+    "BackupPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "Backups"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "Backups",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${Backups.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "OperationsPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": {
+          "Fn::Sub": "${AWS::StackName}-operations"
+        },
+        "Roles": [
+          {
+            "Ref": "InstanceRoleName"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:PutObject",
+                "s3:GetObject"
+              ],
+              "Resource": {
+                "Fn::Sub": "${Backups.Arn}/ledger/${InstanceId}/*"
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "cloudwatch:PutMetricData"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "cloudwatch:namespace": "Monid/Gateway"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "HealthAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "Inspect service health, disk space and backup timers through Systems Manager.",
+        "Namespace": "Monid/Gateway",
+        "MetricName": "HealthOK",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": {
+              "Ref": "InstanceId"
+            }
+          }
+        ],
+        "Statistic": "Minimum",
+        "Period": 300,
+        "EvaluationPeriods": 3,
+        "DatapointsToAlarm": 2,
+        "Threshold": 1,
+        "ComparisonOperator": "LessThanThreshold",
+        "Unit": "Count",
+        "TreatMissingData": "breaching",
+        "AlarmActions": {
+          "Fn::If": [
+            "HasNotifications",
+            [
+              {
+                "Ref": "NotificationTopicArn"
+              }
+            ],
+            []
+          ]
+        },
+        "OKActions": {
+          "Fn::If": [
+            "HasNotifications",
+            [
+              {
+                "Ref": "NotificationTopicArn"
+              }
+            ],
+            []
+          ]
+        }
+      }
+    },
+    "DiskAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "Inspect service health, disk space and backup timers through Systems Manager.",
+        "Namespace": "Monid/Gateway",
+        "MetricName": "DiskUsedPercent",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": {
+              "Ref": "InstanceId"
+            }
+          }
+        ],
+        "Statistic": "Maximum",
+        "Period": 300,
+        "EvaluationPeriods": 3,
+        "DatapointsToAlarm": 2,
+        "Threshold": 85,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Unit": "Percent",
+        "TreatMissingData": "breaching",
+        "AlarmActions": {
+          "Fn::If": [
+            "HasNotifications",
+            [
+              {
+                "Ref": "NotificationTopicArn"
+              }
+            ],
+            []
+          ]
+        },
+        "OKActions": {
+          "Fn::If": [
+            "HasNotifications",
+            [
+              {
+                "Ref": "NotificationTopicArn"
+              }
+            ],
+            []
+          ]
+        }
+      }
+    },
+    "BackupAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "Inspect service health, disk space and backup timers through Systems Manager.",
+        "Namespace": "Monid/Gateway",
+        "MetricName": "BackupAgeSeconds",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": {
+              "Ref": "InstanceId"
+            }
+          }
+        ],
+        "Statistic": "Maximum",
+        "Period": 300,
+        "EvaluationPeriods": 3,
+        "DatapointsToAlarm": 2,
+        "Threshold": 108000,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Unit": "Seconds",
+        "TreatMissingData": "breaching",
+        "AlarmActions": {
+          "Fn::If": [
+            "HasNotifications",
+            [
+              {
+                "Ref": "NotificationTopicArn"
+              }
+            ],
+            []
+          ]
+        },
+        "OKActions": {
+          "Fn::If": [
+            "HasNotifications",
+            [
+              {
+                "Ref": "NotificationTopicArn"
+              }
+            ],
+            []
+          ]
+        }
+      }
+    },
+    "InstanceAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "Inspect service health, disk space and backup timers through Systems Manager.",
+        "Namespace": "AWS/EC2",
+        "MetricName": "StatusCheckFailed",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": {
+              "Ref": "InstanceId"
+            }
+          }
+        ],
+        "Statistic": "Maximum",
+        "Period": 300,
+        "EvaluationPeriods": 3,
+        "DatapointsToAlarm": 2,
+        "Threshold": 0,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Unit": "Count",
+        "TreatMissingData": "breaching",
+        "AlarmActions": {
+          "Fn::If": [
+            "HasNotifications",
+            [
+              {
+                "Ref": "NotificationTopicArn"
+              }
+            ],
+            []
+          ]
+        },
+        "OKActions": {
+          "Fn::If": [
+            "HasNotifications",
+            [
+              {
+                "Ref": "NotificationTopicArn"
+              }
+            ],
+            []
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "BackupBucket": {
+      "Value": {
+        "Ref": "Backups"
+      }
+    }
+  }
+}

@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 
 from .catalog import CatalogStore, Tool
 from .config import Settings
+from .deadline import RequestDeadlineMiddleware
 from .payment import SETTLE_FLAG, new_job_token, register_payment_middleware, tool_for
 from .pricing import UnquotableError, base_quote
 from .store import RunLedger
@@ -98,6 +99,10 @@ def create_app(
     if payment_middleware_factory is not None:
         kwargs["middleware_factory"] = payment_middleware_factory
     register_payment_middleware(app, settings, catalogs, upstream, **kwargs)
+    app.add_middleware(
+        RequestDeadlineMiddleware, seconds=settings.REQUEST_DEADLINE_SECONDS,
+        concurrency=settings.MAX_CONCURRENT_RUNS,
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
