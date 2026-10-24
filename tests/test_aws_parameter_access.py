@@ -137,3 +137,21 @@ def test_simulator_forwards_explicit_context_for_conditional_role_policies(monke
     check_parameter_access.main()
     assert set(simulated) == set(expected)
     assert "Effective-role IAM simulation passed" in capsys.readouterr().out
+
+
+def test_verifier_uses_each_resource_decision_in_aws_aggregate_results():
+    inside, outside = BASE + PREFIX + "/KEY", BASE + "/outside/KEY"
+    cases = [("ssm:GetParameter", inside, "allowed"),
+             ("ssm:GetParameter", outside, "explicitDeny")]
+    resources = [{"EvalResourceName": inside, "EvalResourceDecision": "allowed"},
+                 {"EvalResourceName": outside, "EvalResourceDecision": "explicitDeny"}]
+    result = {"EvalActionName": "ssm:GetParameter",
+              "EvalResourceName": "arn:aws:ssm:${Region}:${Account}:${Id}",
+              "EvalDecision": "explicitDeny", "ResourceSpecificResults": resources}
+    verify_results(cases, [result])
+    for broken in (resources[:1], resources + [resources[0]],
+                   [{**resources[0], "EvalResourceDecision": "explicitDeny"}, resources[1]],
+                   [resources[0], {**resources[1], "EvalResourceDecision": "allowed"}],
+                   [{**resources[0], "MissingContextValues": ["aws:PrincipalTag/Team"]}, resources[1]]):
+        with pytest.raises(ValueError):
+            verify_results(cases, [{**result, "ResourceSpecificResults": broken}])

@@ -47,12 +47,21 @@ def access_cases(role_arn, region, prefix):
 def verify_results(cases, results):
     observed = {}
     for result in results:
-        key = result["EvalActionName"], result["EvalResourceName"]
-        if key in observed:
-            raise ValueError("Duplicate IAM simulation result")
         if result.get("MissingContextValues"):
             raise ValueError("IAM simulation requires additional context")
-        observed[key] = result["EvalDecision"]
+        # AWS may group several ARNs under an aggregate action result. Its
+        # decision is not the decision for each individual resource.
+        resources = result.get("ResourceSpecificResults")
+        if not resources:
+            resources = [{"EvalResourceName": result["EvalResourceName"],
+                          "EvalResourceDecision": result["EvalDecision"]}]
+        for resource in resources:
+            if resource.get("MissingContextValues"):
+                raise ValueError("IAM simulation requires additional context")
+            key = result["EvalActionName"], resource["EvalResourceName"]
+            if key in observed:
+                raise ValueError("Duplicate IAM simulation result")
+            observed[key] = resource["EvalResourceDecision"]
     for action, resource, expected in cases:
         if observed.get((action, resource)) != expected:
             raise ValueError(f"Unexpected or missing IAM decision for {action}; expected {expected}")
