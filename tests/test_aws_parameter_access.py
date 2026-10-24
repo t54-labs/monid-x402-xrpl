@@ -7,10 +7,12 @@ used here. Use check_parameter_access.py for authoritative AWS role simulation.
 import fnmatch
 import json
 import re
+import sys
 from pathlib import Path
 
 import pytest
 
+from scripts import check_parameter_access
 from scripts.check_parameter_access import access_cases, verify_results
 
 ROOT = Path(__file__).parents[1]
@@ -85,6 +87,9 @@ def test_deny_overrides_future_wildcard_grants_including_recursive_ancestors():
     for action, resource, expected in access_cases(ROLE, REGION, PREFIX):
         if expected == "explicitDeny":
             assert decision(policies, action, resource) == expected
+    # Also check the root ARN that the AWS simulator cannot model. Deployment
+    # verification must exercise this path using the actual instance role.
+    assert decision(policies, "ssm:GetParametersByPath", BASE + "/") == "explicitDeny"
 
 
 @pytest.mark.parametrize("filename", ["service.json", "automation.json"])
@@ -105,3 +110,51 @@ def test_verifier_rejects_missing_ambiguous_or_wrong_aws_results():
                     [{**result, "MissingContextValues": ["aws:PrincipalTag/Team"]}]):
         with pytest.raises(ValueError):
             verify_results(cases, results)
+
+
+def test_simulator_forwards_explicit_context_for_conditional_role_policies(monkeypatch, capsys):
+    context = [{"ContextKeyName": "cloudwatch:namespace", "ContextKeyValues": ["Monid/Gateway"],
+                "ContextKeyType": "string"}]
+    monkeypatch.setattr(sys, "argv", ["check_parameter_access.py", "--role-arn", ROLE,
+                                     "--region", REGION, "--prefix", PREFIX,
+                                     "--context-entries", json.dumps(context)])
+    expected = {(action, resource): decision
+                for action, resource, decision in access_cases(ROLE, REGION, PREFIX)}
+    simulated = []
+
+    def aws_json(arguments):
+        if arguments[0] == "sts":
+            return {"Account": ACCOUNT}
+        assert arguments[:2] == ["iam", "simulate-principal-policy"]
+        context_index = arguments.index("--context-entries")
+        assert json.loads(arguments[context_index + 1]) == context
+        action = arguments[arguments.index("--action-names") + 1]
+        resources = arguments[arguments.index("--resource-arns") + 1:context_index]
+        simulated.extend((action, resource) for resource in resources)
+        return {"EvaluationResults": [
+            {"EvalActionName": action, "EvalResourceName": resource,
+             "EvalDecision": expected[action, resource]} for resource in resources
+        ]}
+
+    monkeypatch.setattr(check_parameter_access, "aws_json", aws_json)
+    check_parameter_access.main()
+    assert set(simulated) == set(expected)
+    assert "Effective-role IAM simulation passed" in capsys.readouterr().out
+
+
+def test_verifier_uses_each_resource_decision_in_aws_aggregate_results():
+    inside, outside = BASE + PREFIX + "/KEY", BASE + "/outside/KEY"
+    cases = [("ssm:GetParameter", inside, "allowed"),
+             ("ssm:GetParameter", outside, "explicitDeny")]
+    resources = [{"EvalResourceName": inside, "EvalResourceDecision": "allowed"},
+                 {"EvalResourceName": outside, "EvalResourceDecision": "explicitDeny"}]
+    result = {"EvalActionName": "ssm:GetParameter",
+              "EvalResourceName": "arn:aws:ssm:${Region}:${Account}:${Id}",
+              "EvalDecision": "explicitDeny", "ResourceSpecificResults": resources}
+    verify_results(cases, [result])
+    for broken in (resources[:1], resources + [resources[0]],
+                   [{**resources[0], "EvalResourceDecision": "explicitDeny"}, resources[1]],
+                   [resources[0], {**resources[1], "EvalResourceDecision": "allowed"}],
+                   [{**resources[0], "MissingContextValues": ["aws:PrincipalTag/Team"]}, resources[1]]):
+        with pytest.raises(ValueError):
+            verify_results(cases, [{**result, "ResourceSpecificResults": broken}])

@@ -29,9 +29,10 @@ def access_cases(role_arn, region, prefix):
     cases.extend(("ssm:GetParameterHistory", resource, "explicitDeny") for resource in outside)
     cases.append(("ssm:GetParameterHistory", base + prefix + "/KEY", "implicitDeny"))
     cases.append(("ssm:GetParametersByPath", base + prefix, "allowed"))
-    # Test every ancestor, including both root ARN spellings. An ancestor read
-    # with Recursive=true could otherwise bypass descendant restrictions.
-    ancestors = ["", "/", *[prefix[:i] for i, char in enumerate(prefix) if char == "/" and i]]
+    # The simulator does not evaluate the empty-name parameter/ ARN: even an
+    # unconditional policy produces implicitDeny. Verify path / on the instance
+    # separately; never interpret that simulator result as an explicit deny.
+    ancestors = ["", *[prefix[:i] for i, char in enumerate(prefix) if char == "/" and i]]
     path_resources = [*[base + path for path in ancestors], base + prefix + "-other",
                       base + prefix + "/nested", base + unrelated,
                       *[b + prefix for b in other_bases]]
@@ -47,12 +48,21 @@ def access_cases(role_arn, region, prefix):
 def verify_results(cases, results):
     observed = {}
     for result in results:
-        key = result["EvalActionName"], result["EvalResourceName"]
-        if key in observed:
-            raise ValueError("Duplicate IAM simulation result")
         if result.get("MissingContextValues"):
             raise ValueError("IAM simulation requires additional context")
-        observed[key] = result["EvalDecision"]
+        # AWS may group several ARNs under an aggregate action result. Its
+        # decision is not the decision for each individual resource.
+        resources = result.get("ResourceSpecificResults")
+        if not resources:
+            resources = [{"EvalResourceName": result["EvalResourceName"],
+                          "EvalResourceDecision": result["EvalDecision"]}]
+        for resource in resources:
+            if resource.get("MissingContextValues"):
+                raise ValueError("IAM simulation requires additional context")
+            key = result["EvalActionName"], resource["EvalResourceName"]
+            if key in observed:
+                raise ValueError("Duplicate IAM simulation result")
+            observed[key] = resource["EvalResourceDecision"]
     for action, resource, expected in cases:
         if observed.get((action, resource)) != expected:
             raise ValueError(f"Unexpected or missing IAM decision for {action}; expected {expected}")
@@ -71,6 +81,8 @@ def main():
     parser.add_argument("--role-arn", required=True)
     parser.add_argument("--region", required=True)
     parser.add_argument("--prefix", required=True)
+    parser.add_argument("--context-entries", type=json.loads, default=[],
+                        help="Optional IAM ContextEntries JSON array for conditions on the role")
     args = parser.parse_args()
     cases = access_cases(args.role_arn, args.region, args.prefix)
     identity = aws_json(["sts", "get-caller-identity", "--region", args.region])
@@ -80,12 +92,16 @@ def main():
     results = []
     for action in sorted({case[0] for case in cases}):
         resources = sorted({resource for candidate, resource, _ in cases if candidate == action})
-        response = aws_json(["iam", "simulate-principal-policy", "--region", args.region,
-                             "--policy-source-arn", args.role_arn, "--action-names", action,
-                             "--resource-arns", *resources])
+        request = ["iam", "simulate-principal-policy", "--region", args.region,
+                   "--policy-source-arn", args.role_arn, "--action-names", action,
+                   "--resource-arns", *resources]
+        if args.context_entries:
+            request.extend(["--context-entries", json.dumps(args.context_entries)])
+        response = aws_json(request)
         results.extend(response["EvaluationResults"])
     verify_results(cases, results)
     print(f"Effective-role IAM simulation passed: {len(cases)} decisions; no parameter values retrieved.")
+    print("Root path / requires an instance-role API check; simulation does not model its empty name.")
 
 
 if __name__ == "__main__":
