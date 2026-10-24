@@ -7,10 +7,12 @@ used here. Use check_parameter_access.py for authoritative AWS role simulation.
 import fnmatch
 import json
 import re
+import sys
 from pathlib import Path
 
 import pytest
 
+from scripts import check_parameter_access
 from scripts.check_parameter_access import access_cases, verify_results
 
 ROOT = Path(__file__).parents[1]
@@ -105,3 +107,33 @@ def test_verifier_rejects_missing_ambiguous_or_wrong_aws_results():
                     [{**result, "MissingContextValues": ["aws:PrincipalTag/Team"]}]):
         with pytest.raises(ValueError):
             verify_results(cases, results)
+
+
+def test_simulator_forwards_explicit_context_for_conditional_role_policies(monkeypatch, capsys):
+    context = [{"ContextKeyName": "cloudwatch:namespace", "ContextKeyValues": ["Monid/Gateway"],
+                "ContextKeyType": "string"}]
+    monkeypatch.setattr(sys, "argv", ["check_parameter_access.py", "--role-arn", ROLE,
+                                     "--region", REGION, "--prefix", PREFIX,
+                                     "--context-entries", json.dumps(context)])
+    expected = {(action, resource): decision
+                for action, resource, decision in access_cases(ROLE, REGION, PREFIX)}
+    simulated = []
+
+    def aws_json(arguments):
+        if arguments[0] == "sts":
+            return {"Account": ACCOUNT}
+        assert arguments[:2] == ["iam", "simulate-principal-policy"]
+        context_index = arguments.index("--context-entries")
+        assert json.loads(arguments[context_index + 1]) == context
+        action = arguments[arguments.index("--action-names") + 1]
+        resources = arguments[arguments.index("--resource-arns") + 1:context_index]
+        simulated.extend((action, resource) for resource in resources)
+        return {"EvaluationResults": [
+            {"EvalActionName": action, "EvalResourceName": resource,
+             "EvalDecision": expected[action, resource]} for resource in resources
+        ]}
+
+    monkeypatch.setattr(check_parameter_access, "aws_json", aws_json)
+    check_parameter_access.main()
+    assert set(simulated) == set(expected)
+    assert "Effective-role IAM simulation passed" in capsys.readouterr().out

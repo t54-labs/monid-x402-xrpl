@@ -146,6 +146,13 @@ regions, and accounts. It never retrieves parameter values. Run an SSM command
 and the host environment loader afterward to verify agent/runtime compatibility;
 policy simulation alone does not validate credentials or service behavior.
 
+IAM can report missing context from other policies on the role. Inspect those
+keys with `aws iam get-context-keys-for-principal-policy --policy-source-arn
+"$INSTANCE_ROLE_ARN"`. For the optional operations stack, repeat the verification
+with `--context-entries '[{"ContextKeyName":"cloudwatch:namespace","ContextKeyValues":["Monid/Gateway"],"ContextKeyType":"string"}]'`.
+Use values justified by the actual policies and request being tested; do not
+invent values to obtain an allow. Missing context still fails verification.
+
 The initial managed-runtime installation can use the same SSM transport with
 `--operation refresh-config`; it keeps the locally built image until the first
 approved main deployment publishes and selects an ECR image. ECR image storage
