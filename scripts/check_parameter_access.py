@@ -29,9 +29,10 @@ def access_cases(role_arn, region, prefix):
     cases.extend(("ssm:GetParameterHistory", resource, "explicitDeny") for resource in outside)
     cases.append(("ssm:GetParameterHistory", base + prefix + "/KEY", "implicitDeny"))
     cases.append(("ssm:GetParametersByPath", base + prefix, "allowed"))
-    # Test every ancestor, including both root ARN spellings. An ancestor read
-    # with Recursive=true could otherwise bypass descendant restrictions.
-    ancestors = ["", "/", *[prefix[:i] for i, char in enumerate(prefix) if char == "/" and i]]
+    # The simulator does not evaluate the empty-name parameter/ ARN: even an
+    # unconditional policy produces implicitDeny. Verify path / on the instance
+    # separately; never interpret that simulator result as an explicit deny.
+    ancestors = ["", *[prefix[:i] for i, char in enumerate(prefix) if char == "/" and i]]
     path_resources = [*[base + path for path in ancestors], base + prefix + "-other",
                       base + prefix + "/nested", base + unrelated,
                       *[b + prefix for b in other_bases]]
@@ -100,6 +101,7 @@ def main():
         results.extend(response["EvaluationResults"])
     verify_results(cases, results)
     print(f"Effective-role IAM simulation passed: {len(cases)} decisions; no parameter values retrieved.")
+    print("Root path / requires an instance-role API check; simulation does not model its empty name.")
 
 
 if __name__ == "__main__":

@@ -87,6 +87,9 @@ def test_deny_overrides_future_wildcard_grants_including_recursive_ancestors():
     for action, resource, expected in access_cases(ROLE, REGION, PREFIX):
         if expected == "explicitDeny":
             assert decision(policies, action, resource) == expected
+    # Also check the root ARN that the AWS simulator cannot model. Deployment
+    # verification must exercise this path using the actual instance role.
+    assert decision(policies, "ssm:GetParametersByPath", BASE + "/") == "explicitDeny"
 
 
 @pytest.mark.parametrize("filename", ["service.json", "automation.json"])

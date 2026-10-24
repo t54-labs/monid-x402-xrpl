@@ -153,6 +153,15 @@ with `--context-entries '[{"ContextKeyName":"cloudwatch:namespace","ContextKeyVa
 Use values justified by the actual policies and request being tested; do not
 invent values to obtain an allow. Missing context still fails verification.
 
+The IAM simulator returns `implicitDeny` for the empty-name `parameter/` ARN even
+with an unconditional policy, so that result cannot prove root-path isolation.
+The verifier explicitly leaves this case to an instance-role API check: from the
+host, call `GetParametersByPath` on `/` with a fresh random label filter, no
+decryption, and a one-result limit. Require `AccessDenied` with an explicit-deny
+reason after applying the restriction. The random label prevents unrelated
+parameters being returned if the check unexpectedly succeeds; never log response
+values. Keep standby enabled if this check or the runtime loader fails.
+
 The initial managed-runtime installation can use the same SSM transport with
 `--operation refresh-config`; it keeps the locally built image until the first
 approved main deployment publishes and selects an ECR image. ECR image storage
