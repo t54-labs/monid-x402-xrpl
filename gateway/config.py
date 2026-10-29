@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from decimal import Decimal, InvalidOperation
 from functools import cached_property
 
@@ -85,6 +86,10 @@ class Settings(BaseSettings):
     MONID_REQUEST_TIMEOUT_SECONDS: float = Field(default=120.0, gt=0)
     MONID_MIN_BALANCE_USD: str = "5"
     MONID_BALANCE_CHECK_SECONDS: float = Field(default=60.0, gt=0)
+    MONID_SPEND_BUDGET_MICROS: int = Field(default=0, strict=True, ge=0, le=2**53 - 1)
+    MONID_SPEND_BUDGET_ID: str = ""
+    MONID_SPEND_ACCOUNT_ID: str = ""
+    MONID_TOOL_POLICIES_PATH: str = ""
 
     CATALOG_SNAPSHOT_PATH: str = "data/catalog.json"
     CATALOG_REFRESH_SECONDS: float = Field(default=3600.0, gt=0)
@@ -120,6 +125,14 @@ class Settings(BaseSettings):
     # Covers body reading, balance, verification, execution and settlement.
     # Keep below the ingress timeout, with room for cancellation/DB cleanup.
     REQUEST_DEADLINE_SECONDS: float = Field(default=100.0, gt=0, le=100)
+
+    @field_validator("MONID_SPEND_BUDGET_MICROS", mode="before")
+    @classmethod
+    def _spend_integer(cls, value):
+        # Environment settings arrive as strings; reject floats, bools and exponents.
+        if isinstance(value, str) and re.fullmatch(r"0|[1-9][0-9]{0,15}", value):
+            return int(value)
+        return value
 
     @field_validator("PRICE_MARKUP", "PRICE_QUANTUM_RLUSD", "MIN_PRICE_RLUSD", "MONID_MIN_BALANCE_USD")
     @classmethod

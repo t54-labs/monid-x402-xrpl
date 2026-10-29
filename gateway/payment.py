@@ -26,6 +26,7 @@ from .catalog import TOOL_PATH_PREFIX, CatalogStore, Tool
 from .config import Settings
 from .invoices import BoundInvoiceStore, InvoiceStore, digest
 from .pricing import Quote, UnquotableError, base_quote, quote_tool
+from .spend import SpendDenied
 from .upstream import UpstreamClient
 
 logger = logging.getLogger(__name__)
@@ -233,6 +234,14 @@ def register_payment_middleware(
                     return _error(409, "invoice_payment_mismatch", "Use the original verified payment.")
                 return await deliver_or_settle(row, signature, urlquote(route, safe="/:._-~"))
 
+        # Recovery above never submits new provider work. New quotes/claims
+        # require a currently reviewed maximum bound to this exact request.
+        try:
+            permit = app.state.spend.permit(tool, body or {}, probe=is_probe)
+        except SpendDenied:
+            return _error(503, "spend_not_configured", "Reviewed spend policy and budget are required.")
+        if selected is not None and (selected.extra or {}).get("spend") != permit.quote_context:
+            return _error(409, "spend_policy_changed", "Obtain a fresh reviewed quote.")
         if not is_probe and not await upstream.balance_ok():
             return _error(503, "temporarily_unavailable", "This tool is temporarily unavailable.")
         if row is not None:
@@ -267,6 +276,7 @@ def register_payment_middleware(
                 "crossCurrency": False,
                 "discoveryProbe": is_probe,
                 "pricing": {**quote.detail, "estimated": quote.estimated},
+                "spend": permit.quote_context,
             },
             facilitator=facilitator,
             invoice_store=BoundInvoiceStore(invoices, binding, [tool.provider, tool.endpoint]),
@@ -275,13 +285,19 @@ def register_payment_middleware(
 
         async def run_then_settle(verified: Request) -> Response:
             run_id = uuid.uuid4().hex
-            if invoice_id is None or not await invoices.begin(invoice_id, digest(payload.to_dict()), run_id):
+            if invoice_id is None:
                 return _error(409, "payment_attempt_in_progress", "The invoice was claimed or expired.")
+            try:
+                await app.state.spend.reserve(invoice_id, digest(payload.to_dict()),
+                                              payload.payload.get("signedTxBlob"), run_id, binding, permit)
+            except SpendDenied:
+                return _error(409, "spend_claim_denied", "Spend claim unavailable; no provider call started.")
             verified.state.x402_verified = True
             verified.state.x402_quote = quote
             verified.state.x402_invoice_id = invoice_id
             verified.state.x402_run_id = run_id
             verified.state.x402_tool = tool  # execute the exact catalog snapshot we bound
+            verified.state.spend_permit = permit
             response = await call_next(verified)
             if getattr(verified.state, "x402_execution_unknown", False):
                 return response  # permanent execution tombstone; never reopen it

@@ -1,0 +1,16 @@
+{
+  "native_schema_version": 1,
+  "sqlite_schema": {
+    "invoices": "CREATE TABLE invoices (\n    id TEXT PRIMARY KEY,\n    requirements TEXT NOT NULL,\n    binding TEXT NOT NULL,\n    target TEXT NOT NULL,\n    expires_at REAL NOT NULL,\n    state TEXT NOT NULL DEFAULT 'quoted',\n    payment_hash TEXT,\n    run_id TEXT UNIQUE,\n    response_status INTEGER,\n    response_body BLOB,\n    response_headers TEXT,\n    settlement TEXT,\n    reconciliation TEXT,\n    updated_at REAL NOT NULL\n)",
+    "runs": "CREATE TABLE runs (\n    id TEXT PRIMARY KEY,\n    invoice_id TEXT,\n    tool TEXT NOT NULL,\n    quote_rlusd TEXT NOT NULL,\n    quote_estimated INTEGER NOT NULL,\n    upstream_run_id TEXT,\n    upstream_status TEXT,\n    upstream_cost_usd TEXT,\n    settlement_tx TEXT,\n    payer TEXT,\n    job_token TEXT,\n    state TEXT NOT NULL,\n    created_at REAL NOT NULL,\n    updated_at REAL NOT NULL\n)",
+    "runs_invoice": "CREATE INDEX runs_invoice ON runs (invoice_id)",
+    "spend_budget": "CREATE TABLE spend_budget (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    budget_id TEXT NOT NULL, account_id TEXT NOT NULL,\n    ceiling_micros INTEGER NOT NULL CHECK (ceiling_micros > 0)\n)",
+    "spend_budget_no_change": "CREATE TRIGGER spend_budget_no_change BEFORE UPDATE ON spend_budget\nBEGIN SELECT RAISE(ABORT, 'spend budget change requires reviewed migration'); END",
+    "spend_budget_no_reset": "CREATE TRIGGER spend_budget_no_reset BEFORE DELETE ON spend_budget\nBEGIN SELECT RAISE(ABORT, 'spend budget cannot be reset'); END",
+    "spend_guard_legacy_claim": "CREATE TRIGGER spend_guard_legacy_claim BEFORE UPDATE OF state ON invoices\nWHEN NEW.state = 'executing' AND OLD.state = 'quoted' AND NOT EXISTS (\n    SELECT 1 FROM spend_reservations WHERE invoice_id = NEW.id AND run_id = NEW.run_id\n    AND state = 'reserved'\n)\nBEGIN SELECT RAISE(ABORT, 'durable spend reservation required'); END",
+    "spend_immutable": "CREATE TRIGGER spend_immutable BEFORE UPDATE OF\ninvoice_id,run_id,proof_hash,budget_id,account_id,binding,policy_digest,max_micros,created_at\nON spend_reservations BEGIN SELECT RAISE(ABORT, 'spend reservation identity is immutable'); END",
+    "spend_no_delete": "CREATE TRIGGER spend_no_delete BEFORE DELETE ON spend_reservations\nBEGIN SELECT RAISE(ABORT, 'spend reservations cannot be deleted'); END",
+    "spend_no_reopen": "CREATE TRIGGER spend_no_reopen BEFORE UPDATE OF state ON spend_reservations\nWHEN OLD.state != 'reserved' OR NEW.state NOT IN ('dispatch_unknown','rejected_before_dispatch')\nBEGIN SELECT RAISE(ABORT, 'spend reservation cannot be reopened'); END",
+    "spend_reservations": "CREATE TABLE spend_reservations (\n    invoice_id TEXT PRIMARY KEY, run_id TEXT NOT NULL UNIQUE,\n    proof_hash TEXT NOT NULL UNIQUE, budget_id TEXT NOT NULL, account_id TEXT NOT NULL,\n    binding TEXT NOT NULL, policy_digest TEXT NOT NULL,\n    max_micros INTEGER NOT NULL CHECK (max_micros > 0),\n    state TEXT NOT NULL CHECK (state IN ('reserved','dispatch_unknown','rejected_before_dispatch')),\n    created_at REAL NOT NULL, updated_at REAL NOT NULL\n)"
+  }
+}

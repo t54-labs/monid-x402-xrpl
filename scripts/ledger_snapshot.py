@@ -32,11 +32,15 @@ def quote_identifier(name):
 def inventory(connection):
     tables = {r[0] for r in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     result = {}
-    for table in ("runs", "invoices"):
+    for table in ("runs", "invoices", "spend_budget", "spend_reservations"):
         if table not in tables:
             continue
         columns = [r[1] for r in connection.execute("PRAGMA table_info(" + table + ")")]
-        states = dict(connection.execute("SELECT state, COUNT(*) FROM " + table + " GROUP BY state"))
+        states = (
+            dict(connection.execute("SELECT state, COUNT(*) FROM " + table + " GROUP BY state"))
+            if "state" in columns
+            else {"allocated": connection.execute("SELECT count(*) FROM " + table).fetchone()[0]}
+        )
         result[table] = {"columns": columns, "rows": sum(states.values()), "states": states}
     return result
 
@@ -48,7 +52,8 @@ def data_hash(connection, table, columns):
         + ",".join(map(quote_identifier, columns))
         + " FROM "
         + quote_identifier(table)
-        + " ORDER BY id"
+        + " ORDER BY "
+        + {"spend_budget": "singleton", "spend_reservations": "invoice_id"}.get(table, "id")
     )
     for row in connection.execute(query):
         encoded = json.dumps(
@@ -82,7 +87,14 @@ def backup(source, destination):
             origin.backup(copied, pages=256, progress=progress, sleep=0.05)
             check_integrity(copied)
             tables = inventory(copied)
-        manifest = {"format": 1, "sha256": file_hash(target), "tables": tables, "created_at": time.time()}
+            schema_version = copied.execute("PRAGMA user_version").fetchone()[0]
+        manifest = {
+            "format": 2,
+            "schema_version": schema_version,
+            "sha256": file_hash(target),
+            "tables": tables,
+            "created_at": time.time(),
+        }
         fd = os.open(destination / "manifest.json", os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         with os.fdopen(fd, "w") as stream:
             json.dump(manifest, stream, indent=2)
@@ -95,10 +107,13 @@ def backup(source, destination):
 def verify_snapshot(directory):
     directory = Path(directory)
     manifest = json.loads((directory / "manifest.json").read_text())
-    if manifest.get("format") != 1 or file_hash(directory / "gateway.sqlite3") != manifest["sha256"]:
+    if manifest.get("format") not in (1, 2) or file_hash(directory / "gateway.sqlite3") != manifest["sha256"]:
         raise ValueError("Snapshot checksum does not match its manifest")
     with read_only(directory / "gateway.sqlite3") as db:
         check_integrity(db)
+        version = db.execute("PRAGMA user_version").fetchone()[0]
+        if version not in (0, 1) or version != manifest.get("schema_version", 0):
+            raise ValueError("Snapshot financial schema version mismatch")
         if inventory(db) != manifest["tables"]:
             raise ValueError("Snapshot inventory does not match its manifest")
     return manifest

@@ -18,6 +18,7 @@ from .config import Settings
 from .deadline import RequestDeadlineMiddleware
 from .payment import SETTLE_FLAG, new_job_token, register_payment_middleware, tool_for
 from .pricing import UnquotableError, base_quote
+from .spend import SpendDenied, SpendGuard
 from .store import RunLedger
 from .upstream import RunResult, UpstreamClient
 
@@ -78,6 +79,8 @@ def create_app(
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         task = asyncio.create_task(catalogs.run_forever()) if sync_catalog else None
         problems = settings.configuration_problems
+        if not settings.X402_PAYMENT_ENABLED:
+            problems = [*problems, "payment_enforcement_disabled"]
         if problems:
             logger.warning("paid routes are closed: %s", "; ".join(problems))
         try:
@@ -94,6 +97,7 @@ def create_app(
     app.state.catalogs = catalogs
     app.state.upstream = upstream
     app.state.ledger = ledger
+    app.state.spend = SpendGuard(settings, ledger)
 
     kwargs: dict[str, Any] = {"facilitator": facilitator}
     if payment_middleware_factory is not None:
@@ -114,6 +118,10 @@ def create_app(
     @app.get("/health")
     async def health() -> dict[str, Any]:
         problems = settings.configuration_problems
+        if not settings.X402_PAYMENT_ENABLED:
+            problems = [*problems, "payment_enforcement_disabled"]
+        if not await app.state.spend.ready(catalogs.catalog.tools):
+            problems = [*problems, "reviewed_spend_policy_or_budget_unavailable"]
         return {
             "ok": True,
             "paymentsReady": not problems,
@@ -173,6 +181,10 @@ def create_app(
             return JSONResponse(status_code=404, content={"error": {"code": "unknown_tool"}})
         if settings.X402_PAYMENT_ENABLED and not getattr(request.state, "x402_verified", False):
             return JSONResponse(status_code=402, content={"error": {"code": "payment_required"}})
+        # Payment-disabled compatibility mode must not become a spend bypass.
+        permit = getattr(request.state, "spend_permit", None)
+        if permit is None or not getattr(request.state, "x402_verified", False):
+            return JSONResponse(status_code=503, content={"error": {"code": "spend_not_configured"}})
         try:
             payload = await request.json()
         except ValueError:
@@ -189,6 +201,22 @@ def create_app(
         )
 
         async with run_slots:
+            try:
+                current = catalogs.catalog.by_route(request.scope["path"])
+                if current is None or app.state.spend.permit(current, payload) != permit:
+                    raise SpendDenied("queued policy changed")
+                await app.state.spend.dispatch(request.state.x402_invoice_id, run_id, permit)
+                # The commit yields to other tasks. Recheck after it, with no
+                # further await before UpstreamClient.run constructs its URL,
+                # headers and JSON. A rejection keeps dispatch intent occupied.
+                current = catalogs.catalog.by_route(request.scope["path"])
+                if current is None or app.state.spend.permit(current, payload) != permit:
+                    raise SpendDenied("policy changed while committing dispatch")
+            except SpendDenied:
+                await app.state.spend.reject_before_dispatch(request.state.x402_invoice_id)
+                return JSONResponse(
+                    status_code=503, content={"error": {"code": "spend_pre_dispatch_rejected"}}
+                )
             try:
                 result = await upstream.run(tool.provider, tool.endpoint, payload)
                 # An accepted async job must be recoverable even if polling times

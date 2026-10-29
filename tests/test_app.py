@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 from types import SimpleNamespace
 from typing import Any
@@ -9,8 +10,9 @@ import httpx
 import pytest
 
 from gateway.app import create_app
-from gateway.catalog import save_snapshot
+from gateway.catalog import build_catalog, save_snapshot
 from gateway.config import RLUSD_CURRENCY_HEX, RLUSD_TESTNET_ISSUER
+from gateway.spend import catalog_digest
 
 from .conftest import PAY_TO, endpoint, make_settings, per_call
 
@@ -95,11 +97,40 @@ def facilitator() -> FakeFacilitator:
     return FakeFacilitator()
 
 
+def write_synthetic_policies(settings):
+    from pathlib import Path
+
+    path = Path(settings.MONID_TOOL_POLICIES_PATH)
+    if path.exists():
+        return
+    integer_rule = {"type": "integer", "minimum": 0, "maximum": 100}
+    path.write_text(json.dumps({"version": 1, "tools": [
+        {"provider": t.provider, "endpoint": t.endpoint, "catalog_digest": catalog_digest(t),
+         "max_cost_micros": 100_000, "expires_at": 2_100_000_000,
+         "inputs": {"query": {"type": "string", "max_length": 1000},
+                    "q": {"type": "string", "max_length": 1000},
+                    "limit": integer_rule,
+                    "searchTerms": {"type": "array", "max_items": 5,
+                                    "items": {"type": "string", "max_length": 100}},
+                    "options": {"type": "object", "inputs": {"a": integer_rule, "b": integer_rule},
+                                "required": []}},
+         "required": [], "review_reference": "synthetic offline fixture only"}
+        for t in build_catalog(ENDPOINTS, [], settings).tools
+    ]}))
+
+
 def build(tmp_path, upstream, facilitator, **overrides):
     # This fake explicitly models a reviewed no-submission contract. Production
     # defaults stay closed; separate regressions exercise that default via routes.
     overrides.setdefault("X402_ALLOW_UNSUBMITTED_RETRY", True)
+    overrides.setdefault("MONID_SPEND_BUDGET_MICROS", 10_000_000)
+    overrides.setdefault("MONID_SPEND_BUDGET_ID", "synthetic-budget")
+    overrides.setdefault("MONID_SPEND_ACCOUNT_ID", "synthetic-account")
+    fixture_policy = "MONID_TOOL_POLICIES_PATH" not in overrides
+    overrides.setdefault("MONID_TOOL_POLICIES_PATH", str(tmp_path / "synthetic-policies.json"))
     settings = make_settings(tmp_path, **overrides)
+    if fixture_policy:
+        write_synthetic_policies(settings)
     save_snapshot(settings.CATALOG_SNAPSHOT_PATH, ENDPOINTS, [], "2026-10-17T00:00:00Z")
     upstream_client = httpx.AsyncClient(transport=httpx.MockTransport(upstream.handler))
     app = create_app(settings, http_client=upstream_client, facilitator=facilitator, sync_catalog=False)
@@ -116,7 +147,8 @@ def sign(challenge: dict[str, Any]) -> str:
     envelope = {
         "x402Version": 2,
         "accepted": accepted,
-        "payload": {"invoiceId": accepted["extra"]["invoiceId"], "signedTxBlob": "DEADBEEF"},
+        "payload": {"invoiceId": accepted["extra"]["invoiceId"],
+                    "signedTxBlob": hashlib.sha256(accepted["extra"]["invoiceId"].encode()).hexdigest()},
     }
     return base64.b64encode(json.dumps(envelope).encode()).decode()
 

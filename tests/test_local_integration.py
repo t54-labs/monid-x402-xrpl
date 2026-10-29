@@ -14,7 +14,7 @@ from gateway.catalog import save_snapshot
 from scripts import fake_monid
 
 from .conftest import make_settings
-from .test_app import ENDPOINTS, decode_header, paid_post, sign
+from .test_app import ENDPOINTS, decode_header, paid_post, sign, write_synthetic_policies
 
 
 class CountingTransport(httpx.ASGITransport):
@@ -29,7 +29,11 @@ class CountingTransport(httpx.ASGITransport):
 
 @pytest.fixture
 async def local_gateway(tmp_path, monkeypatch):
-    settings = make_settings(tmp_path)
+    settings = make_settings(tmp_path, MONID_SPEND_BUDGET_MICROS=10_000_000,
+                             MONID_SPEND_BUDGET_ID="synthetic-budget",
+                             MONID_SPEND_ACCOUNT_ID="synthetic-account",
+                             MONID_TOOL_POLICIES_PATH=str(tmp_path / "synthetic-policies.json"))
+    write_synthetic_policies(settings)
     save_snapshot(settings.CATALOG_SNAPSHOT_PATH, ENDPOINTS, [], "synthetic-snapshot")
     monkeypatch.setenv("FAKE_MONID_KEY", "test-key")
     monkeypatch.setenv("CATALOG", settings.CATALOG_SNAPSHOT_PATH)

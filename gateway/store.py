@@ -8,6 +8,8 @@ import sqlite3
 import time
 from typing import Any
 
+from .spend import SPEND_SCHEMA_VERSION, SpendDenied, migrate, validate_schema
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
     id TEXT PRIMARY KEY,
@@ -65,7 +67,16 @@ class RunLedger:
             os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         self._conn = sqlite3.connect(path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
-        self._conn.executescript(SCHEMA)
+        try:
+            if self._conn.execute("PRAGMA user_version").fetchone()[0] not in (0, SPEND_SCHEMA_VERSION):
+                raise SpendDenied("unsupported financial schema version")
+            if self._conn.execute("PRAGMA user_version").fetchone()[0] == SPEND_SCHEMA_VERSION:
+                validate_schema(self._conn)
+            self._conn.executescript(SCHEMA)
+            migrate(self._conn)
+        except BaseException:
+            self._conn.close()
+            raise
         self._lock = asyncio.Lock()
 
     async def _run(self, sql: str, params: tuple[Any, ...]) -> list[sqlite3.Row]:
@@ -74,8 +85,25 @@ class RunLedger:
     async def transaction(
         self, statements: list[tuple[str, tuple[Any, ...]]]
     ) -> list[list[sqlite3.Row]]:
+        return await self._locked(self._execute, statements)
+
+    async def atomic(self, operation):
+        """Serialized read/check/write transaction across independent connections."""
+        return await self._locked(self._atomic, operation)
+
+    def _atomic(self, operation):
+        self._conn.execute("BEGIN IMMEDIATE")
+        try:
+            result = operation(self._conn)
+            self._conn.commit()
+            return result
+        except BaseException:
+            self._conn.rollback()
+            raise
+
+    async def _locked(self, operation, argument):
         async with self._lock:
-            task = asyncio.create_task(asyncio.to_thread(self._execute, statements))
+            task = asyncio.create_task(asyncio.to_thread(operation, argument))
             cancelled = False
             while True:
                 try:
