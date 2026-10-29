@@ -482,12 +482,13 @@ async def test_catalog_refresh_cannot_change_verified_execution_target(tmp_path,
 
     facilitator.post = post
     response = await client.post("/t/exa/search", json={"query": "xrpl"}, headers=headers)
-    assert response.status_code == 200
-    assert upstream.runs[0]["provider"] == original.provider
-    assert upstream.runs[0]["endpoint"] == original.endpoint
+    assert response.status_code == 503
+    assert upstream.runs == []
+    reservation = app.state.ledger._conn.execute("SELECT * FROM spend_reservations").fetchone()
+    assert reservation["state"] == "rejected_before_dispatch" and reservation["max_micros"] == 100_000
     app.state.catalogs.catalog = Catalog(tools=[replace(original, price={"type": "UNQUOTABLE"})])
-    assert (await client.post("/t/exa/search", json={"query": "xrpl"}, headers=headers)).status_code == 200
-    assert len(upstream.runs) == 1
+    assert (await client.post("/t/exa/search", json={"query": "xrpl"}, headers=headers)).status_code == 503
+    assert upstream.runs == []
 
 
 @pytest.mark.parametrize("run_id", [None, "", "   "])
@@ -582,7 +583,11 @@ async def test_reconciliation_cannot_reopen_unknown_execution(tmp_path, upstream
     app, client = build(tmp_path, upstream, facilitator)
     headers = await signed_request(client)
     invoice_id = decode_header(headers["PAYMENT-SIGNATURE"])["payload"]["invoiceId"]
-    assert await app.state.x402_invoices.begin(invoice_id, "synthetic-hash", "synthetic-run")
+    row = await app.state.x402_invoices.record(invoice_id)
+    permit = app.state.spend.permit(app.state.catalogs.catalog.by_route("/t/exa/search"), {"query": "xrpl"})
+    await app.state.spend.reserve(
+        invoice_id, "synthetic-hash", "DEADBEEF", "synthetic-run", row["binding"], permit
+    )
     with pytest.raises(ValueError, match="Only an unknown settlement"):
         await app.state.x402_invoices.reconcile(invoice_id, evidence="synthetic-evidence", settlement=None)
     assert (await app.state.x402_invoices.record(invoice_id))["state"] == "executing"

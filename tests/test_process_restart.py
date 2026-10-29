@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -113,3 +114,8 @@ def test_process_death_preserves_execution_and_settlement_claims(
         marker = tmp_path / name
         actual = len(marker.read_text().splitlines()) if marker.exists() else 0
         assert actual == count
+
+    with sqlite3.connect(tmp_path / "gateway.sqlite3") as db:
+        reservations = db.execute("SELECT max_micros,state FROM spend_reservations").fetchall()
+        assert reservations == [(100_000, "reserved" if phase == "before_post" else "dispatch_unknown")]
+        assert db.execute("SELECT ceiling_micros FROM spend_budget").fetchone() == (10_000_000,)
